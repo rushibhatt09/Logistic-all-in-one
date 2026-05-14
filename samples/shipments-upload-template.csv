@@ -1,0 +1,3 @@
+awb,orderId,carrier,status,region,promisedDeliveryDate,actualDeliveryDate,attempts,rto
+DLV123456789,SHOP-1001,Delhivery,Out for Delivery,Mumbai,2026-05-13,,1,no
+SFX987654321,SHOP-1002,Shadowfax,RTO Initiated,Delhi NCR,2026-05-13,,2,yes

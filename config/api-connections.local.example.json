@@ -1,0 +1,39 @@
+{
+  "shopify": {
+    "enabled": false,
+    "shopDomain": "your-store.myshopify.com",
+    "accessToken": "PASTE_SHOPIFY_ADMIN_API_TOKEN_HERE"
+  },
+  "clickpost": {
+    "enabled": false,
+    "baseUrl": "https://api.clickpost.in",
+    "apiKey": "PASTE_CLICKPOST_API_KEY_HERE"
+  },
+  "unicoure": {
+    "enabled": false,
+    "baseUrl": "PASTE_UNICOURE_BASE_URL_HERE",
+    "apiKey": "PASTE_UNICOURE_API_KEY_HERE"
+  },
+  "carriers": {
+    "delhivery": {
+      "enabled": false,
+      "baseUrl": "https://track.delhivery.com",
+      "apiKey": "PASTE_DELHIVERY_API_KEY_HERE"
+    },
+    "shadowfax": {
+      "enabled": false,
+      "baseUrl": "PASTE_SHADOWFAX_BASE_URL_HERE",
+      "apiKey": "PASTE_SHADOWFAX_API_KEY_HERE"
+    },
+    "xpressbees": {
+      "enabled": false,
+      "baseUrl": "PASTE_XPRESSBEES_BASE_URL_HERE",
+      "apiKey": "PASTE_XPRESSBEES_API_KEY_HERE"
+    },
+    "dtdc": {
+      "enabled": false,
+      "baseUrl": "PASTE_DTDC_BASE_URL_HERE",
+      "apiKey": "PASTE_DTDC_API_KEY_HERE"
+    }
+  }
+}

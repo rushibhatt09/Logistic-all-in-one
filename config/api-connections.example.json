@@ -1,0 +1,39 @@
+{
+  "shopify": {
+    "enabled": false,
+    "shopDomain": "your-store.myshopify.com",
+    "accessToken": "put-token-in-local-file-only"
+  },
+  "clickpost": {
+    "enabled": false,
+    "baseUrl": "https://api.clickpost.in",
+    "apiKey": "put-api-key-in-local-file-only"
+  },
+  "unicoure": {
+    "enabled": false,
+    "baseUrl": "https://your-unicoure-api.example.com",
+    "apiKey": "put-api-key-in-local-file-only"
+  },
+  "carriers": {
+    "delhivery": {
+      "enabled": false,
+      "baseUrl": "https://track.delhivery.com",
+      "apiKey": "put-api-key-in-local-file-only"
+    },
+    "shadowfax": {
+      "enabled": false,
+      "baseUrl": "",
+      "apiKey": "put-api-key-in-local-file-only"
+    },
+    "xpressbees": {
+      "enabled": false,
+      "baseUrl": "",
+      "apiKey": "put-api-key-in-local-file-only"
+    },
+    "dtdc": {
+      "enabled": false,
+      "baseUrl": "",
+      "apiKey": "put-api-key-in-local-file-only"
+    }
+  }
+}

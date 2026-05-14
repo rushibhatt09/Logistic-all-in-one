@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline Logistics Upload Audit</title>
+    <style>
+      :root {
+        --bg: #f4f6f8;
+        --surface: #ffffff;
+        --ink: #18212f;
+        --muted: #697486;
+        --line: #d9e0e8;
+        --accent: #0f766e;
+        --danger: #b91c1c;
+        --warn: #b45309;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Segoe UI, Arial, sans-serif;
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        margin-top: 8px;
+      }
+
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 18px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 12px;
+      }
+
+      textarea {
+        min-height: 130px;
+        resize: vertical;
+      }
+
+      button {
+        width: 100%;
+        border: 0;
+        border-radius: 8px;
+        padding: 13px;
+        margin-top: 12px;
+        background: var(--accent);
+        color: white;
+        font-weight: 800;
+        cursor: pointer;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfcfe;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 28px;
+        margin-top: 8px;
+      }
+
+      .status {
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        color: var(--muted);
+        margin-top: 12px;
+      }
+
+      .status.error {
+        color: var(--danger);
+        border-color: #fecaca;
+        background: #fff7f7;
+      }
+
+      .status.ok {
+        color: #166534;
+        border-color: #bbf7d0;
+        background: #f0fdf4;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        font-size: 13px;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+      }
+
+      .badge {
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #edf2f7;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .badge.warn {
+        background: #ffedd5;
+        color: var(--warn);
+      }
+
+      .badge.danger {
+        background: #fee2e2;
+        color: var(--danger);
+      }
+
+      @media (max-width: 900px) {
+        .grid,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Offline Logistics Upload Audit</h1>
+      <p class="subtitle">This page works without the backend server. Use it to upload Busybees/courier CSV and inspect columns, shipments, RTO, and charge variance.</p>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Upload File</h2>
+          <select id="dataType">
+            <option value="shipments">Shipments / tracking data</option>
+            <option value="charges">Charges / invoice data</option>
+          </select>
+          <input id="fileInput" type="file" accept=".csv,.json,text/csv,application/json" />
+          <textarea id="pasteInput" placeholder="Or paste CSV here"></textarea>
+          <button id="importBtn">Upload & Audit Offline</button>
+          <div class="status" id="statusBox">Ready.</div>
+        </article>
+
+        <article class="panel">
+          <h2>Detected Columns</h2>
+          <div id="columnsBox" class="status">No file loaded yet.</div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="metrics" id="metrics"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Preview Rows</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead id="previewHead"></thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      function parseCsv(content) {
+        const rows = [];
+        let cell = '';
+        let row = [];
+        let inQuotes = false;
+
+        for (let index = 0; index < content.length; index += 1) {
+          const char = content[index];
+          const next = content[index + 1];
+
+          if (char === '"' && next === '"') {
+            cell += '"';
+            index += 1;
+          } else if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            row.push(cell.trim());
+            cell = '';
+          } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && next === '\n') index += 1;
+            row.push(cell.trim());
+            if (row.some(value => value)) rows.push(row);
+            row = [];
+            cell = '';
+          } else {
+            cell += char;
+          }
+        }
+
+        row.push(cell.trim());
+        if (row.some(value => value)) rows.push(row);
+        const headers = rows.shift() || [];
+        return rows.map(values => Object.fromEntries(headers.map((header, index) => [header, values[index] || ''])));
+      }
+
+      function cleanKey(value) {
+        return String(value || '').toLowerCase().replaceAll(' ', '').replaceAll('_', '').replaceAll('-', '');
+      }
+
+      function field(row, names) {
+        const normalized = Object.fromEntries(Object.entries(row).map(([key, value]) => [cleanKey(key), value]));
+        for (const name of names) {
+          const value = normalized[cleanKey(name)];
+          if (value) return value;
+        }
+        return '';
+      }
+
+      function normalizeStatus(raw) {
+        const value = String(raw || '').toLowerCase();
+        if (value.includes('rto') || value.includes('return')) return 'RTO';
+        if (value.includes('deliver') && !value.includes('out')) return 'Delivered';
+        if (value.includes('out')) return 'Out for Delivery';
+        if (value.includes('transit')) return 'In Transit';
+        if (value.includes('attempt') || value.includes('fail')) return 'Attempted';
+        return raw || 'Unknown';
+      }
+
+      function renderMetrics(rows, type) {
+        let metrics;
+        if (type === 'charges') {
+          const totalBilled = rows.reduce((sum, row) => sum + Number(field(row, ['billedAmount', 'chargedAmount', 'amount', 'billAmount']) || 0), 0);
+          const totalExpected = rows.reduce((sum, row) => sum + Number(field(row, ['expectedAmount', 'rateAmount', 'agreedAmount']) || 0), 0);
+          const variance = totalBilled - totalExpected;
+          metrics = [
+            ['Rows', rows.length],
+            ['Billed', totalBilled.toFixed(2)],
+            ['Expected', totalExpected.toFixed(2)],
+            ['Variance', variance.toFixed(2)],
+            ['Disputes', rows.filter(row => Math.abs(Number(field(row, ['billedAmount', 'chargedAmount', 'amount', 'billAmount']) || 0) - Number(field(row, ['expectedAmount', 'rateAmount', 'agreedAmount']) || 0)) > 10).length]
+          ];
+        } else {
+          const statuses = rows.map(row => normalizeStatus(field(row, ['status', 'currentStatus', 'shipmentStatus', 'latestStatus'])));
+          const awbs = new Set(rows.map(row => field(row, ['awb', 'awbNumber', 'trackingNumber', 'waybill'])).filter(Boolean));
+          const carriers = new Set(rows.map(row => field(row, ['carrier', 'courier', 'courierName', 'carrierName'])).filter(Boolean));
+          metrics = [
+            ['Rows', rows.length],
+            ['Unique AWBs', awbs.size],
+            ['Carriers', carriers.size],
+            ['Delivered', statuses.filter(status => status === 'Delivered').length],
+            ['RTO', statuses.filter(status => status === 'RTO').length]
+          ];
+        }
+
+        document.querySelector('#metrics').innerHTML = metrics.map(([label, value]) => `
+          <div class="metric"><span>${label}</span><strong>${value}</strong></div>
+        `).join('');
+      }
+
+      function renderPreview(rows) {
+        const headers = Object.keys(rows[0] || {}).slice(0, 12);
+        document.querySelector('#columnsBox').textContent = headers.length ? headers.join(', ') : 'No columns found.';
+        document.querySelector('#previewHead').innerHTML = `<tr>${headers.map(header => `<th>${header}</th>`).join('')}</tr>`;
+        document.querySelector('#previewBody').innerHTML = rows.slice(0, 25).map(row => `
+          <tr>${headers.map(header => `<td>${row[header] || ''}</td>`).join('')}</tr>
+        `).join('');
+      }
+
+      async function importOffline() {
+        const statusBox = document.querySelector('#statusBox');
+        const file = document.querySelector('#fileInput').files[0];
+        const pasted = document.querySelector('#pasteInput').value.trim();
+        const type = document.querySelector('#dataType').value;
+
+        statusBox.className = 'status';
+        statusBox.textContent = 'Reading data...';
+
+        try {
+          const content = pasted || (file ? await file.text() : '');
+          if (!content) {
+            statusBox.className = 'status error';
+            statusBox.textContent = 'Please choose a file or paste CSV.';
+            return;
+          }
+
+          const rows = file?.name.endsWith('.json') ? JSON.parse(content) : parseCsv(content);
+          if (!Array.isArray(rows) || rows.length === 0) {
+            statusBox.className = 'status error';
+            statusBox.textContent = 'No rows found. Check if the file has headers and rows.';
+            return;
+          }
+
+          renderMetrics(rows, type);
+          renderPreview(rows);
+          statusBox.className = 'status ok';
+          statusBox.textContent = `Imported ${rows.length} rows offline. This file is readable.`;
+        } catch (error) {
+          statusBox.className = 'status error';
+          statusBox.textContent = `Could not read file: ${error.message}`;
+        }
+      }
+
+      document.querySelector('#importBtn').addEventListener('click', importOffline);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Logistics Control Tower</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">LC</span>
+        <div>
+          <strong>Logistics Control</strong>
+          <small>Dispute & carrier intelligence</small>
+        </div>
+      </div>
+      <nav id="mainNav">
+        <button class="active" data-page="dashboard">Dashboard</button>
+        <button data-page="shipments">Shipments</button>
+        <button data-page="disputes">Disputes</button>
+        <button data-page="reports">Reports</button>
+        <button data-page="integrations">Integrations</button>
+      </nav>
+    </aside>
+
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Operations Dashboard</h1>
+          <p id="pageSubtitle">Live shipment status, carrier performance, RTO risk, and billing disputes.</p>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" id="refreshBtn">Refresh</button>
+          <button class="primary" id="exportBtn">Export CSV</button>
+          <div class="status-pill" id="freshness">Checking freshness...</div>
+        </div>
+      </header>
+
+      <section class="filters">
+        <input id="search" placeholder="Search AWB, carrier, status, region" />
+        <select id="carrierFilter">
+          <option value="">All carriers</option>
+        </select>
+        <select id="statusFilter">
+          <option value="">All statuses</option>
+          <option value="delivered">Delivered</option>
+          <option value="out_for_delivery">Out for delivery</option>
+          <option value="in_transit">In transit</option>
+          <option value="rto_initiated">RTO initiated</option>
+        </select>
+        <button class="ghost" id="clearFiltersBtn">Clear Filters</button>
+      </section>
+
+      <section class="data-banner" id="dataBanner">Loading data...</section>
+
+      <section class="page active" id="dashboardPage">
+        <section class="command-strip">
+          <div>
+            <span class="eyebrow">Control Tower</span>
+            <strong>Daily logistics health</strong>
+            <p>Monitor delivery movement, RTO exposure, billing variance, and open recovery work from one view.</p>
+          </div>
+          <div class="strip-actions">
+            <button class="ghost" data-page-jump="shipments">Review Shipments</button>
+            <button class="primary" data-page-jump="integrations">Import Data</button>
+          </div>
+        </section>
+
+        <section class="metrics" id="metrics"></section>
+
+        <section class="charts">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Status Mix</h2>
+              <span>Current shipment split</span>
+            </div>
+            <canvas id="statusChart" height="220"></canvas>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Carrier Volume</h2>
+              <span>Shipments by courier</span>
+            </div>
+            <canvas id="carrierChart" height="220"></canvas>
+          </article>
+        </section>
+
+        <section class="grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Carrier Performance</h2>
+              <span>RTO and dispute signals</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Carrier</th>
+                    <th>Total</th>
+                    <th>Delivered</th>
+                    <th>Avg Delivery</th>
+                    <th>RTO %</th>
+                    <th>Error %</th>
+                    <th>Open Disputes</th>
+                    <th>Refund Value</th>
+                  </tr>
+                </thead>
+                <tbody id="carrierRows"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Shipment Exceptions</h2>
+              <span>Needs attention today</span>
+            </div>
+            <div id="exceptionList" class="exception-list"></div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Operational Signals</h2>
+            <span>Fast read on what needs attention</span>
+          </div>
+          <div class="signal-grid" id="signalGrid"></div>
+        </section>
+      </section>
+
+      <section class="page" id="shipmentsPage">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Shipment Control Table</h2>
+            <span>Click any row to inspect details</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>AWB</th>
+                  <th>Order</th>
+                  <th>Carrier</th>
+                  <th>Status</th>
+                  <th>Region</th>
+                  <th>Attempts</th>
+                  <th>RTO</th>
+                </tr>
+              </thead>
+              <tbody id="shipmentRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel detail-panel" id="shipmentDetail">
+          <div class="panel-head">
+            <h2>Shipment Detail</h2>
+            <span>Select a shipment row</span>
+          </div>
+          <div id="shipmentDetailBody" class="detail-empty">No shipment selected.</div>
+        </section>
+      </section>
+
+      <section class="page" id="disputesPage">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Dispute Backlog</h2>
+            <span>Update status after courier submission or recovery</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Dispute</th>
+                  <th>AWB</th>
+                  <th>Reason</th>
+                  <th>Claim</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="disputeRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="page" id="reportsPage">
+        <section class="grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Cost Variance</h2>
+              <span>Billed vs expected charges</span>
+            </div>
+            <canvas id="chargeChart" height="240"></canvas>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Daily Audit Snapshot</h2>
+              <span>Finance-ready summary</span>
+            </div>
+            <div id="reportCards" class="report-cards"></div>
+          </article>
+        </section>
+      </section>
+
+      <section class="page" id="integrationsPage">
+        <section class="grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Upload Data</h2>
+              <span>CSV, JSON, or Excel import for audit check</span>
+            </div>
+            <form id="uploadForm" class="form-grid">
+              <select name="type">
+                <option value="shipments">Shipments / tracking data</option>
+                <option value="charges">Charges / invoice data</option>
+              </select>
+              <select name="format">
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+              <input name="file" type="file" accept=".csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+              <textarea name="content" rows="5" placeholder="Optional: paste CSV here if file upload does not respond"></textarea>
+              <div class="upload-status" id="uploadStatus">Ready to upload.</div>
+              <button class="primary" type="submit">Upload & Audit</button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Test Tracking Event</h2>
+              <span>Simulates ClickPost/courier webhook</span>
+            </div>
+            <form id="eventForm" class="form-grid">
+              <input name="awb" value="DLV123456789" placeholder="AWB number" />
+              <select name="rawStatus">
+                <option>Delivered</option>
+                <option>Out for Delivery</option>
+                <option>Delivery Attempted</option>
+                <option>RTO Initiated</option>
+              </select>
+              <input name="location" value="Mumbai Hub" placeholder="Location" />
+              <button class="primary" type="submit">Send Event</button>
+            </form>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Test Charge Validation</h2>
+              <span>Creates dispute when variance is high</span>
+            </div>
+            <form id="chargeForm" class="form-grid">
+              <input name="awb" value="SFX987654321" placeholder="AWB number" />
+              <input name="billedAmount" type="number" value="140" placeholder="Billed amount" />
+              <input name="expectedAmount" type="number" value="90" placeholder="Expected amount" />
+              <button class="primary" type="submit">Validate Charge</button>
+            </form>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Audit Log</h2>
+            <span>Latest uploads, disputes, and system actions</span>
+          </div>
+          <div id="auditLog" class="audit-log"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Connection Roadmap</h2>
+            <span>Ready API points for live systems</span>
+          </div>
+          <div class="integration-list">
+            <div><strong>Shopify</strong><span>Orders, fulfillments, cancellations, returns</span></div>
+            <div><strong>Unicoure</strong><span>Shipment master, SKU mapping, ERP reconciliation</span></div>
+            <div><strong>ClickPost</strong><span>Tracking events, courier status normalization</span></div>
+            <div><strong>Carrier APIs</strong><span>Charges, RTO, delivery attempts, invoice validation</span></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div class="toast" id="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

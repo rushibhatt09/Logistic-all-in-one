@@ -1,0 +1,14 @@
+{
+  "name": "logistics-dispute-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Professional logistics, carrier performance, and dispute tracking dashboard starter.",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

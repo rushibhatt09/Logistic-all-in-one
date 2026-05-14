@@ -1,0 +1,3 @@
+﻿Bill Type,Carrier,AWB Number,Shipment Status,Seller Company Name,Shipment ID,Order ID,Payment Type,Pincode,City,Zone,Origin City
+Forward,Busybees,BB123,Delivered,Test Seller,SHP1,ORD1,Prepaid,411001,Pune,West,Mumbai
+RTO,Busybees,BB124,RTO Initiated,Test Seller,SHP2,ORD2,COD,110001,Delhi,North,Mumbai
