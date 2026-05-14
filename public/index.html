@@ -1,291 +1,344 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Logistics Control Tower</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-mark">LC</span>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dermatouch · Logistics Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <img
+          src="https://dermatouch.com/cdn/shop/files/dermatouch-logo.png?v=1762853286&width=300"
+          alt="Dermatouch"
+          class="brand-logo"
+          onerror="this.style.display='none';document.getElementById('brandText').style.display='flex'"
+        >
+        <span id="brandText" class="brand-text-fallback">DERMATOUCH</span>
+        <div class="brand-divider"></div>
         <div>
-          <strong>Logistics Control</strong>
-          <small>Dispute & carrier intelligence</small>
+          <div class="brand-product">Logistics Intelligence</div>
+          <div id="freshness" class="brand-freshness">Loading…</div>
         </div>
       </div>
-      <nav id="mainNav">
-        <button class="active" data-page="dashboard">Dashboard</button>
-        <button data-page="shipments">Shipments</button>
-        <button data-page="disputes">Disputes</button>
-        <button data-page="reports">Reports</button>
-        <button data-page="integrations">Integrations</button>
-      </nav>
-    </aside>
+      <div class="header-actions">
+        <button id="recalcBtn" class="btn btn-outline">⟳ Recalculate</button>
+        <button id="exportBtn" class="btn btn-outline">↓ Export CSV</button>
+        <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+      </div>
+    </div>
+  </header>
 
-    <main class="app">
-      <header class="topbar">
+  <div id="toast" class="toast"></div>
+
+  <main class="main">
+
+    <!-- 1 · KPI Strip -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- 2 · Carrier Billing Audit -->
+    <div class="panel">
+      <div class="panel-head">
         <div>
-          <h1 id="pageTitle">Operations Dashboard</h1>
-          <p id="pageSubtitle">Live shipment status, carrier performance, RTO risk, and billing disputes.</p>
+          <h2 class="panel-title">Carrier Billing Audit</h2>
+          <p class="panel-sub">Rate card vs billed · overcharge detection · dispute exposure per carrier</p>
         </div>
-        <div class="top-actions">
-          <button class="ghost" id="refreshBtn">Refresh</button>
-          <button class="primary" id="exportBtn">Export CSV</button>
-          <div class="status-pill" id="freshness">Checking freshness...</div>
-        </div>
-      </header>
+        <div id="billingBadge"></div>
+      </div>
+      <div class="scroll-x">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Carrier</th>
+              <th class="r">Shipments</th>
+              <th class="r">Billed ₹</th>
+              <th class="r">Expected ₹</th>
+              <th class="r">Variance</th>
+              <th class="r">Disputes</th>
+              <th class="r">At Risk ₹</th>
+              <th class="r">RTO Rate</th>
+              <th class="r">Avg Del.</th>
+            </tr>
+          </thead>
+          <tbody id="auditRows"></tbody>
+        </table>
+      </div>
+    </div>
 
-      <section class="filters">
-        <input id="search" placeholder="Search AWB, carrier, status, region" />
-        <select id="carrierFilter">
-          <option value="">All carriers</option>
-        </select>
-        <select id="statusFilter">
-          <option value="">All statuses</option>
-          <option value="delivered">Delivered</option>
-          <option value="out_for_delivery">Out for delivery</option>
-          <option value="in_transit">In transit</option>
-          <option value="rto_initiated">RTO initiated</option>
-        </select>
-        <button class="ghost" id="clearFiltersBtn">Clear Filters</button>
-      </section>
+    <!-- 3 · Operations + Disputes -->
+    <div class="two-col">
 
-      <section class="data-banner" id="dataBanner">Loading data...</section>
-
-      <section class="page active" id="dashboardPage">
-        <section class="command-strip">
+      <div class="panel">
+        <div class="panel-head">
           <div>
-            <span class="eyebrow">Control Tower</span>
-            <strong>Daily logistics health</strong>
-            <p>Monitor delivery movement, RTO exposure, billing variance, and open recovery work from one view.</p>
+            <h2 class="panel-title">Operations Overview</h2>
+            <p class="panel-sub">Delivery performance · RTO exposure · live shipment flow</p>
           </div>
-          <div class="strip-actions">
-            <button class="ghost" data-page-jump="shipments">Review Shipments</button>
-            <button class="primary" data-page-jump="integrations">Import Data</button>
+        </div>
+        <div class="signal-grid" id="signalGrid"></div>
+        <div class="chart-box">
+          <div class="chart-label">Status Distribution</div>
+          <canvas id="statusChart" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">Open Disputes</h2>
+            <p class="panel-sub" id="disputeSub">Loading…</p>
           </div>
-        </section>
+          <button id="loadMoreDisputes" class="btn btn-ghost btn-sm" style="display:none">Load more</button>
+        </div>
+        <div id="disputeList" class="dispute-list"></div>
+      </div>
 
-        <section class="metrics" id="metrics"></section>
+    </div>
 
-        <section class="charts">
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Status Mix</h2>
-              <span>Current shipment split</span>
-            </div>
-            <canvas id="statusChart" height="220"></canvas>
-          </article>
+    <!-- 4 · Shipment Register -->
+    <div class="panel">
+      <div class="panel-head wrap-head">
+        <div>
+          <h2 class="panel-title">Shipment Register</h2>
+          <p class="panel-sub" id="shipmentSub">Loading…</p>
+        </div>
+        <div class="filter-bar">
+          <input id="search" class="search" type="text" placeholder="Search AWB, region, carrier…">
+          <select id="carrierFilter" class="select">
+            <option value="">All carriers</option>
+          </select>
+          <select id="statusFilter" class="select">
+            <option value="">All statuses</option>
+            <option value="delivered">Delivered</option>
+            <option value="in_transit">In Transit</option>
+            <option value="out_for_delivery">Out for Delivery</option>
+            <option value="rto_initiated">RTO Initiated</option>
+            <option value="rto_delivered">RTO Delivered</option>
+            <option value="picked_up">Picked Up</option>
+            <option value="delivery_attempted">Delivery Attempted</option>
+            <option value="exception">Exception</option>
+          </select>
+          <button id="clearFiltersBtn" class="btn btn-ghost">Clear</button>
+        </div>
+      </div>
+      <div id="dataBanner" class="data-banner"></div>
+      <div class="shipment-pane">
+        <div class="scroll-x table-scroll">
+          <table class="table" id="shipTable">
+            <thead>
+              <tr>
+                <th>AWB</th>
+                <th>Order</th>
+                <th>Carrier</th>
+                <th>Status</th>
+                <th>Region</th>
+                <th class="c">Attempts</th>
+                <th class="c">RTO</th>
+              </tr>
+            </thead>
+            <tbody id="shipRows"></tbody>
+          </table>
+        </div>
+        <div id="detailPanel" class="detail-panel">
+          <div class="detail-empty">Select a shipment<br>to view details</div>
+        </div>
+      </div>
+    </div>
 
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Carrier Volume</h2>
-              <span>Shipments by courier</span>
-            </div>
-            <canvas id="carrierChart" height="220"></canvas>
-          </article>
-        </section>
+    <!-- 5 · Import + Activity -->
+    <div class="two-col">
 
-        <section class="grid">
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Carrier Performance</h2>
-              <span>RTO and dispute signals</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Carrier</th>
-                    <th>Total</th>
-                    <th>Delivered</th>
-                    <th>Avg Delivery</th>
-                    <th>RTO %</th>
-                    <th>Error %</th>
-                    <th>Open Disputes</th>
-                    <th>Refund Value</th>
-                  </tr>
-                </thead>
-                <tbody id="carrierRows"></tbody>
-              </table>
-            </div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Shipment Exceptions</h2>
-              <span>Needs attention today</span>
-            </div>
-            <div id="exceptionList" class="exception-list"></div>
-          </article>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Operational Signals</h2>
-            <span>Fast read on what needs attention</span>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">Import Data</h2>
+            <p class="panel-sub">Upload billing files, shipment exports, or rate cards</p>
           </div>
-          <div class="signal-grid" id="signalGrid"></div>
-        </section>
-      </section>
-
-      <section class="page" id="shipmentsPage">
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Shipment Control Table</h2>
-            <span>Click any row to inspect details</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>AWB</th>
-                  <th>Order</th>
-                  <th>Carrier</th>
-                  <th>Status</th>
-                  <th>Region</th>
-                  <th>Attempts</th>
-                  <th>RTO</th>
-                </tr>
-              </thead>
-              <tbody id="shipmentRows"></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="panel detail-panel" id="shipmentDetail">
-          <div class="panel-head">
-            <h2>Shipment Detail</h2>
-            <span>Select a shipment row</span>
-          </div>
-          <div id="shipmentDetailBody" class="detail-empty">No shipment selected.</div>
-        </section>
-      </section>
-
-      <section class="page" id="disputesPage">
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Dispute Backlog</h2>
-            <span>Update status after courier submission or recovery</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Dispute</th>
-                  <th>AWB</th>
-                  <th>Reason</th>
-                  <th>Claim</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="disputeRows"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section class="page" id="reportsPage">
-        <section class="grid">
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Cost Variance</h2>
-              <span>Billed vs expected charges</span>
-            </div>
-            <canvas id="chargeChart" height="240"></canvas>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Daily Audit Snapshot</h2>
-              <span>Finance-ready summary</span>
-            </div>
-            <div id="reportCards" class="report-cards"></div>
-          </article>
-        </section>
-      </section>
-
-      <section class="page" id="integrationsPage">
-        <section class="grid">
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Upload Data</h2>
-              <span>CSV, JSON, or Excel import for audit check</span>
-            </div>
-            <form id="uploadForm" class="form-grid">
-              <select name="type">
-                <option value="shipments">Shipments / tracking data</option>
-                <option value="charges">Charges / invoice data</option>
+        </div>
+        <form id="uploadForm">
+          <div class="form-row">
+            <div class="field">
+              <label class="label">Data type</label>
+              <select name="type" class="select w-full">
+                <option value="shipments">Shipments</option>
+                <option value="charges">Charges / Billing</option>
+                <option value="rateCards">Rate Cards</option>
               </select>
-              <select name="format">
+            </div>
+            <div class="field">
+              <label class="label">Format</label>
+              <select name="format" class="select w-full">
                 <option value="csv">CSV</option>
                 <option value="json">JSON</option>
               </select>
-              <input name="file" type="file" accept=".csv,.json,.xlsx,text/csv,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-              <textarea name="content" rows="5" placeholder="Optional: paste CSV here if file upload does not respond"></textarea>
-              <div class="upload-status" id="uploadStatus">Ready to upload.</div>
-              <button class="primary" type="submit">Upload & Audit</button>
-            </form>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Test Tracking Event</h2>
-              <span>Simulates ClickPost/courier webhook</span>
             </div>
-            <form id="eventForm" class="form-grid">
-              <input name="awb" value="DLV123456789" placeholder="AWB number" />
-              <select name="rawStatus">
-                <option>Delivered</option>
-                <option>Out for Delivery</option>
-                <option>Delivery Attempted</option>
-                <option>RTO Initiated</option>
-              </select>
-              <input name="location" value="Mumbai Hub" placeholder="Location" />
-              <button class="primary" type="submit">Send Event</button>
-            </form>
-          </article>
-
-          <article class="panel">
-            <div class="panel-head">
-              <h2>Test Charge Validation</h2>
-              <span>Creates dispute when variance is high</span>
-            </div>
-            <form id="chargeForm" class="form-grid">
-              <input name="awb" value="SFX987654321" placeholder="AWB number" />
-              <input name="billedAmount" type="number" value="140" placeholder="Billed amount" />
-              <input name="expectedAmount" type="number" value="90" placeholder="Expected amount" />
-              <button class="primary" type="submit">Validate Charge</button>
-            </form>
-          </article>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Audit Log</h2>
-            <span>Latest uploads, disputes, and system actions</span>
           </div>
-          <div id="auditLog" class="audit-log"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Connection Roadmap</h2>
-            <span>Ready API points for live systems</span>
+          <div class="field">
+            <label class="label">File</label>
+            <input type="file" name="file" class="file-input" accept=".csv,.json,.xlsx">
           </div>
-          <div class="integration-list">
-            <div><strong>Shopify</strong><span>Orders, fulfillments, cancellations, returns</span></div>
-            <div><strong>Unicoure</strong><span>Shipment master, SKU mapping, ERP reconciliation</span></div>
-            <div><strong>ClickPost</strong><span>Tracking events, courier status normalization</span></div>
-            <div><strong>Carrier APIs</strong><span>Charges, RTO, delivery attempts, invoice validation</span></div>
+          <div class="field">
+            <label class="label">Or paste CSV data</label>
+            <textarea name="content" class="textarea" rows="4" placeholder="Paste comma-separated rows here…"></textarea>
           </div>
-        </section>
-      </section>
-    </main>
+          <div class="form-foot">
+            <button type="submit" class="btn btn-primary">Upload &amp; Audit</button>
+            <span id="uploadStatus" class="upload-status"></span>
+          </div>
+        </form>
+      </div>
 
-    <div class="toast" id="toast"></div>
-    <script src="/app.js"></script>
-  </body>
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title">Activity Log</h2>
+            <p class="panel-sub">Recent imports and system events</p>
+          </div>
+        </div>
+        <div id="auditLog" class="activity-log"></div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Carrier Detail Page (slide-in overlay) -->
+  <div id="carrierPage" class="carrier-page">
+    <div class="carrier-page-header">
+      <button class="back-btn" id="carrierBackBtn">← Dashboard</button>
+      <div class="carrier-title" id="carrierPageTitle"></div>
+      <div class="carrier-badge" id="carrierPageBadge"></div>
+      <div style="flex:1"></div>
+      <div id="carrierLoadingBadge" style="font-size:12px;color:var(--text-3)">Loading…</div>
+    </div>
+
+    <div class="carrier-body">
+      <!-- KPIs -->
+      <div class="carrier-kpi-grid" id="carrierKpis"></div>
+
+      <!-- Charts row: Zone overcharge bar + Weight overcharge bar -->
+      <div class="carrier-two-col" style="margin-bottom:20px">
+        <div class="c-panel">
+          <div class="c-panel-head">
+            <div class="c-panel-title">Overcharge by Zone / Region</div>
+            <div class="c-panel-sub">Top zones where carrier billed above rate card</div>
+          </div>
+          <div style="padding:16px 20px">
+            <canvas id="zoneChart" height="200"></canvas>
+          </div>
+        </div>
+        <div class="c-panel">
+          <div class="c-panel-head">
+            <div class="c-panel-title">Overcharge by Weight Slab</div>
+            <div class="c-panel-sub">Which package sizes have the most billing errors</div>
+          </div>
+          <div style="padding:16px 20px">
+            <canvas id="weightChart" height="200"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Zone table + Disputes -->
+      <div class="carrier-two-col">
+        <div class="c-panel">
+          <div class="c-panel-head">
+            <div class="c-panel-title">Zone Overcharge Breakdown</div>
+            <div class="c-panel-sub" id="carrierZoneSub">All shipments · overcharge = billed minus rate card</div>
+          </div>
+          <div style="overflow-x:auto;max-height:360px;overflow-y:auto">
+            <table class="zone-table" id="carrierZoneTable">
+              <thead><tr><th>Zone / Region</th><th class="r">Ships</th><th class="r">Overcharge ₹</th><th class="r">Disputes</th><th class="r">RTO</th></tr></thead>
+              <tbody id="carrierZoneRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="c-panel">
+          <div class="c-panel-head">
+            <div class="c-panel-title">Open Disputes</div>
+            <div class="c-panel-sub" id="carrierDisputeSub"></div>
+          </div>
+          <div class="c-dispute-list" id="carrierDisputeList"></div>
+        </div>
+      </div>
+
+      <!-- Shipment Register -->
+      <div class="c-panel" style="margin-top:20px">
+        <div class="c-panel-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div>
+            <div class="c-panel-title">All Shipments</div>
+            <div class="c-panel-sub" id="carrierShipSub"></div>
+          </div>
+          <div class="filter-bar">
+            <input id="carrierSearch" class="search" type="text" placeholder="Search AWB, region…">
+            <select id="carrierStatusFilter" class="select">
+              <option value="">All statuses</option>
+              <option value="delivered">Delivered</option>
+              <option value="in_transit">In Transit</option>
+              <option value="out_for_delivery">Out for Delivery</option>
+              <option value="rto_initiated">RTO Initiated</option>
+              <option value="rto_delivered">RTO Delivered</option>
+              <option value="picked_up">Picked Up</option>
+              <option value="delivery_attempted">Attempted</option>
+              <option value="exception">Exception</option>
+            </select>
+            <select id="carrierOCFilter" class="select">
+              <option value="">All charges</option>
+              <option value="over">Overcharged only</option>
+              <option value="ok">Correct charges</option>
+            </select>
+          </div>
+        </div>
+        <div class="scroll-x" style="max-height:480px;overflow-y:auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>AWB</th>
+                <th>Order</th>
+                <th>Status</th>
+                <th>Zone / Region</th>
+                <th class="r">Billed ₹</th>
+                <th class="r">Overcharge ₹</th>
+                <th class="c">RTO</th>
+              </tr>
+            </thead>
+            <tbody id="carrierShipRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Chatbot -->
+  <div id="chatBubble" class="chat-bubble" title="Ask AI about your logistics">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  </div>
+  <div id="chatWindow" class="chat-window">
+    <div class="chat-win-head">
+      <div>
+        <div style="font-weight:700;font-size:14px">Logistics AI</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:1px">Ask about shipments, disputes, carriers…</div>
+      </div>
+      <button id="chatClose" class="chat-close">✕</button>
+    </div>
+    <div id="chatMessages" class="chat-messages">
+      <div class="chat-msg assistant">
+        <div class="chat-bubble-msg">Hi! I'm your logistics assistant. Ask me anything about your shipments, carrier disputes, overcharges, or RTO rates.</div>
+      </div>
+    </div>
+    <div class="chat-input-row">
+      <input id="chatInput" class="chat-input" type="text" placeholder="Ask about disputes, overcharges…">
+      <button id="chatSend" class="chat-send-btn">↑</button>
+    </div>
+  </div>
+
+  <script src="app.js" type="module"></script>
+</body>
 </html>

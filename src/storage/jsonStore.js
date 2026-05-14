@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const dataDir = path.resolve('data');
@@ -42,9 +42,7 @@ export async function readJson() {
 
 export async function writeJson(data) {
   await mkdir(dataDir, { recursive: true });
-  const tmpPath = `${dbPath}.tmp`;
-  await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf8');
-  await rename(tmpPath, dbPath);
+  await writeFile(dbPath, JSON.stringify(data, null, 2), 'utf8');
 }
 
 function extractFirstJsonObject(content) {

@@ -1,9 +1,28 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApiRequest } from './src/routes/api.js';
 import { ensureSeedData } from './src/storage/jsonStore.js';
+
+// Load .env file — search current dir and up to 4 parent dirs
+(function loadEnv() {
+  let dir = path.dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 5; i++) {
+    const envPath = path.join(dir, '.env');
+    if (existsSync(envPath)) {
+      for (const line of readFileSync(envPath, 'utf8').split('\n')) {
+        const m = line.match(/^\s*([^#=\s][^=]*?)\s*=\s*(.*?)\s*$/);
+        if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+      break;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+})();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

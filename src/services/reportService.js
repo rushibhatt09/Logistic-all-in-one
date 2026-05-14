@@ -26,18 +26,14 @@ export async function getDashboardSummary() {
     unvalidatedCharges: data.charges.filter(item => item.expectedAmount === null || item.expectedAmount === undefined).length,
     totalBillingAmount: roundMoney(data.charges.reduce((sum, charge) => sum + Number(charge.billedAmount || 0), 0)),
     expectedBillingAmount: roundMoney(data.charges.reduce((sum, charge) => sum + Number(charge.expectedAmount || 0), 0)),
-    estimatedRefundAmount: roundMoney(data.charges
+    refundAmount: roundMoney(data.charges
       .filter(charge => Number(charge.varianceAmount || 0) > 10)
-      .reduce((sum, charge) => sum + Number(charge.varianceAmount || 0), 0)),
-    confirmedRefundAmount: roundMoney(data.charges
-      .filter(charge => Number(charge.varianceAmount || 0) > 10 && charge.rateCardSource !== 'image rate card')
       .reduce((sum, charge) => sum + Number(charge.varianceAmount || 0), 0)),
     recoveredAmount: roundMoney(data.disputes.reduce((sum, dispute) => sum + Number(dispute.recoveredAmount || 0), 0)),
     netOverbilling: 0,
     avgDeliveryDays: null,
     deliveryDaysSample: 0
   };
-  totals.totalRefundAmount = totals.confirmedRefundAmount || totals.estimatedRefundAmount;
   totals.netOverbilling = roundMoney(totals.totalBillingAmount - totals.expectedBillingAmount);
 
   for (const shipment of data.shipments) {
@@ -132,7 +128,12 @@ export async function getDashboardSummary() {
       lastEventAt: data.events
         .map(event => event.eventTime)
         .sort()
-        .at(-1) || null
+        .at(-1)
+        || data.shipments
+          .map(s => s.lastEventAt || s.updatedAt || '')
+          .sort()
+          .at(-1)
+        || null
     }
   };
 }

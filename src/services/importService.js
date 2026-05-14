@@ -130,7 +130,7 @@ function getOrCreateOrderFast(data, orderByExternalId, externalOrderId, row = {}
       externalOrderId: orderId,
       customerRegion: readField(row, ['region', 'customerRegion', 'state', 'destinationRegion', 'destinationState', 'zone', 'city', 'destinationCity']) || '',
       orderValue: Number(readField(row, ['orderValue', 'amount', 'value', 'productValue', 'product_value', 'invoiceAmount', 'billedAmount']) || 0),
-      paymentType: readField(row, ['paymentType', 'paymentMode', 'payment_mode', 'packageType', 'package_type', 'payment', 'codPrepaid']) || '',
+      paymentType: readField(row, ['paymentType', 'packageType', 'package_type', 'codPrepaid', 'paymentMode', 'payment_mode', 'payment', 'type']) || '',
       status: readField(row, ['orderStatus', 'status']) || 'created',
       createdAt: readField(row, ['createdAt', 'orderDate', 'pickupDate', 'pickedDate', 'pickup_date', 'date']) || new Date().toISOString()
     };
@@ -171,7 +171,7 @@ function importShipments(data, rows, sourceName = '') {
       sellerCompanyName: readField(row, ['sellerCompanyName', 'clientName', 'client_name', 'client', 'seller', 'companyName']),
       externalShipmentId: readField(row, ['shipmentId', 'shipmentID']),
       billType: readField(row, ['billType', 'direction']),
-      paymentType: readField(row, ['paymentType', 'paymentMode', 'payment_mode', 'packageType', 'package_type', 'payment', 'type']),
+      paymentType: readField(row, ['paymentType', 'packageType', 'package_type', 'paymentMode', 'payment_mode', 'payment', 'type']),
       chargedWeightGrams: normalizeWeightToGrams(readField(row, ['chargedWeight', 'charged_weight', 'chargeableWeight', 'weight', 'actualWeight', 'weightInGms', 'weight_in_gms'])),
       promisedDeliveryDate: readField(row, ['promisedDeliveryDate', 'expectedDeliveryDate', 'edd']) || null,
       pickupDate,
@@ -208,7 +208,7 @@ function importCharges(data, rows) {
     const billedAmount = Number(readField(row, ['billedAmount', 'chargedAmount', 'billAmount', 'invoiceAmount', 'costInclGst', 'cost', 'grandTotal', 'totalCharges', 'total_charges', 'grossAmount', 'gross_amount', 'total', 'subTotal', 'totalAmount', 'total_amount', 'amount', 'freightCharge', 'freightCharges', 'freight_charges', 'totalCharge', 'netAmount']) || 0);
     const expectedRaw = readField(row, ['expectedAmount', 'rateAmount', 'agreedAmount', 'contractRate', 'expectedCharge']);
     const expectedAmount = expectedRaw === '' ? null : Number(expectedRaw);
-    if (!billedAmount) return;
+    if (!billedAmount || billedAmount < 0) return;
     const varianceAmount = Number((billedAmount - expectedAmount).toFixed(2));
     const charge = {
       id: `chg_${randomUUID()}`,
@@ -220,7 +220,7 @@ function importCharges(data, rows) {
       varianceAmount: expectedAmount === null ? null : varianceAmount,
       chargedWeightGrams: normalizeWeightToGrams(readField(row, ['chargedWeight', 'charged_weight', 'chargeableWeight', 'weight', 'actualWeight', 'weightInGms', 'weight_in_gms'])),
       zone: readField(row, ['zone', 'destinationZone', 'destination_zone', 'destinationCategory']) || shipment.destinationRegion || '',
-      paymentType: readField(row, ['paymentType', 'paymentMode', 'payment_mode', 'packageType', 'package_type', 'payment', 'type']) || shipment.paymentType || '',
+      paymentType: readField(row, ['paymentType', 'packageType', 'package_type', 'paymentMode', 'payment_mode', 'payment', 'type']) || shipment.paymentType || '',
       invoiceId: readField(row, ['invoiceId', 'invoice', 'invoiceNumber', 'billNumber', 'serialNumber', 'serial_number']) || '',
       billingDate: readField(row, ['billingDate', 'date', 'pickupDate', 'pickup_date']) || new Date().toISOString().slice(0, 10)
     };
@@ -312,14 +312,24 @@ export function applyRateCards(data, threshold = 10) {
       zone: charge.zone || shipment.destinationRegion,
       serviceType: shipment.rtoFlag || String(shipment.currentStatus || '').startsWith('rto_') ? 'rto' : 'forward'
     });
-    if (!rate) continue;
+    if (!rate) {
+      if (charge.expectedAmount !== null || charge.varianceAmount !== null) {
+        charge.expectedAmount = null;
+        charge.varianceAmount = null;
+        updated += 1;
+      }
+      continue;
+    }
 
     const weightGrams = charge.chargedWeightGrams || shipment.chargedWeightGrams || 500;
     const codAmount = isCod(charge.paymentType || shipment.paymentType)
       ? Math.max(rate.codFlat || 0, ((order?.orderValue || 0) * (rate.codPercent || 0)) / 100)
       : 0;
     let expectedAmount = slabAmount(rate, weightGrams) + codAmount;
-    if (rate.serviceType === 'rto' && rate.rtoFactor) expectedAmount = slabAmount({ ...rate, serviceType: 'forward' }, weightGrams) * rate.rtoFactor;
+    if (rate.serviceType === 'rto' && rate.rtoFactor) {
+      const fwdAmount = slabAmount(rate, weightGrams);
+      expectedAmount = fwdAmount + fwdAmount * rate.rtoFactor; // forward leg + return leg
+    }
     if (rate.taxPercent) expectedAmount *= 1 + (rate.taxPercent / 100);
     expectedAmount = roundMoney(expectedAmount);
 
@@ -396,11 +406,16 @@ export async function recalculateDisputes() {
   const data = await readJson();
   data.rateCards ||= [];
   const removedDuplicateCharges = dedupeCharges(data);
+  // Remove invalid charges (negative or zero billed amounts from old imports)
+  const chargesBefore = data.charges.length;
+  data.charges = data.charges.filter(c => Number(c.billedAmount || 0) > 0);
+  const removedInvalidCharges = chargesBefore - data.charges.length;
   const previousDisputes = data.disputes.length;
   data.disputes = data.disputes.filter(dispute => dispute.reason !== 'charge_variance');
   const removedOldDisputes = previousDisputes - data.disputes.length;
   const validation = applyRateCards(data);
   validation.removedDuplicateCharges = removedDuplicateCharges;
+  validation.removedInvalidCharges = removedInvalidCharges;
   validation.removedOldDisputes = removedOldDisputes;
   data.auditLogs.push({
     id: `aud_${randomUUID()}`,
@@ -478,7 +493,8 @@ function normalizeWeightToGrams(value) {
 
 function isCod(value) {
   const text = String(value || '').toLowerCase();
-  return text.includes('cod') || text === '1';
+  // 'qr' and 'upi' are QR-code / UPI-on-delivery methods — still COD from a billing standpoint
+  return text.includes('cod') || text === '1' || text.includes('qr') || text.includes('upi') || text.includes('cash');
 }
 
 function normalizeKey(value) {
@@ -487,41 +503,35 @@ function normalizeKey(value) {
 
 function normalizeZone(value) {
   const text = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const zoneMap = {
+    // Single-letter codes: Delhivery A/B and GoSwift A/B/C/D/E all pass through this
+    a: 'local', b: 'zonal', c: 'metro', d: 'roi', e: 'nejk', f: 'nejk',
+    // Delhivery compound codes
+    c1: 'c1', c2: 'c2', d1: 'd1', d2: 'd2',
+    // XpressBees z-codes
+    z1: 'withincity', z2: 'regional', z3: 'metro',
+    z4: 'restindia', z5: 'restindia', z6: 'specialzones',
+    // Shadowfax / named zones
+    intracity: 'intracity', withincity: 'withincity',
+    withinzone: 'withinzone', regional: 'regional',
+    roi: 'roi', restofindia: 'restindia', restindia: 'restindia',
+    specialzone: 'specialzones', specialzones: 'specialzones',
+    metro: 'metro', local: 'local', zonal: 'zonal', nejk: 'nejk',
+    // DTDC numeric-prefix zone codes (01_LOCAL → '01local' after strip)
+    '01local': 'local',
+    '02withinstate': 'zonal', '03withinzone': 'zonal',
+    '04metrototmetro': 'metro', '04roitometro': 'metro',
+    '05roia': 'roi', '06roib': 'roi',
+    '07spldest': 'nejk', '07spl': 'nejk',
+  };
+  if (zoneMap[text]) return zoneMap[text];
+  // Keyword fallbacks for any remaining DTDC-style or unknown codes
+  if (text.includes('spl') || text.includes('jk') || text.includes('nejk')) return 'nejk';
   if (text.includes('roi')) return 'roi';
   if (text.includes('metro')) return 'metro';
   if (text.includes('local')) return 'local';
-  if (text.includes('zonal')) return 'zonal';
-  if (text.includes('nejk') || text.includes('nej') || text.includes('jk')) return 'nejk';
-  const zoneMap = {
-    a: 'local',
-    b: 'zonal',
-    c: 'metro',
-    c1: 'c1',
-    c2: 'c2',
-    d: 'roi',
-    d1: 'd1',
-    d2: 'd2',
-    e: 'nejk',
-    f: 'nejk',
-    z1: 'withincity',
-    z2: 'regional',
-    z3: 'metro',
-    z4: 'restindia',
-    z5: 'restindia',
-    z6: 'specialzones',
-    intracity: 'intracity',
-    withinzone: 'withinzone',
-    roi: 'roi',
-    restofindia: 'restindia',
-    restindia: 'restindia',
-    specialzone: 'specialzone',
-    specialzones: 'specialzones',
-    metro: 'metro',
-    local: 'local',
-    zonal: 'zonal',
-    nejk: 'nejk'
-  };
-  return zoneMap[text] || text;
+  if (text.includes('withinstate') || text.includes('withinzone') || text.includes('zonal')) return 'zonal';
+  return text;
 }
 
 function normalizeServiceType(value) {
@@ -578,20 +588,35 @@ function buildDefaultRateCards() {
     }
   };
 
+  // Delhivery Surface — rates are pre-GST; billing CSVs expose gross_amount (pre-GST)
   [['A', 20, 18], ['B', 21, 20], ['C1', 30, 25], ['C2', 30, 25], ['D1', 34, 29], ['D2', 34, 29], ['E', 44, 34], ['F', 44, 34]]
-    .forEach(([zone, first, extra]) => add('Delhivery', zone, first, extra, { codFlat: 14, codPercent: 1, taxPercent: 18, rtoFactor: 0.5 }));
+    .forEach(([zone, first, extra]) => add('Delhivery', zone, first, extra, { codFlat: 14, codPercent: 1, rtoFactor: 0.5 }));
 
+  // Shadowfax Standard Express — FSC (10%) billed as separate column in CSV; compare freight-to-freight
   [['Intracity', 21, 18], ['Within Zone', 26, 20], ['Metro', 36, 30], ['ROI', 40, 31], ['Special Zone', 50, 38]]
     .forEach(([zone, first, extra]) => add('Shadowfax', zone, first, extra, { codFlat: 15, codPercent: 1, rtoFactor: 0.6 }));
 
+  // XpressBees Air — GST inclusive in rates; z1-z6 zone codes map via normalizeZone
+  // No separate RTO rate cards: XpressBees RTO settlements are net-of-COD-reversal rows (billedAmount ~₹1)
+  // which never exceed the dispute threshold. Forward charges are always evaluated against forward rates.
   [['Within City', 23, 20], ['Regional', 29, 22], ['Metro', 39, 29], ['Rest India', 43, 35], ['Special Zones', 51, 40]]
     .forEach(([zone, first, extra]) => add('XpressBees', zone, first, extra, { codFlat: 16, codPercent: 1.18 }));
 
+  // Busybees routes through XpressBees — same rate card
+  [['Within City', 23, 20], ['Regional', 29, 22], ['Metro', 39, 29], ['Rest India', 43, 35], ['Special Zones', 51, 40]]
+    .forEach(([zone, first, extra]) => add('Busybees', zone, first, extra, { codFlat: 16, codPercent: 1.18 }));
+
+  // DTDC Air 2025
   [['Local', 25, 11], ['Zonal', 29, 16], ['Metro', 36, 39], ['ROI', 39, 47], ['NE-JK', 52, 61]]
     .forEach(([zone, first, extra]) => add('DTDC', zone, first, extra, { codFlat: 20, codPercent: 1, rtoFactor: 1 }));
 
+  // GoSwift Air 2025 — Cost (incl GST) billing; GST=18%; COD flat ~₹45 derived from billing data
   [['Local', 31, 31], ['Zonal', 36, 36], ['Metro', 49, 49], ['ROI', 53, 53], ['NE-JK', 68, 68]]
-    .forEach(([zone, first, extra]) => add('GoSwift', zone, first, extra));
+    .forEach(([zone, first, extra]) => add('GoSwift', zone, first, extra, { taxPercent: 18, codFlat: 45 }));
+
+  // Amazon ATS Surface 2025
+  [['Local', 20, 14], ['Zonal', 23, 14], ['Metro', 30, 25], ['ROI', 34, 29], ['NE-JK', 44, 34]]
+    .forEach(([zone, first, extra]) => add('Amazon ATS', zone, first, extra, { codFlat: 14, codPercent: 1, rtoFactor: 0.55 }));
 
   return rows;
 }
