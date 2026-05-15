@@ -15,8 +15,11 @@
   <div id="appIntro" class="app-intro" aria-hidden="true">
     <div class="intro-card">
       <div class="intro-logo-shell">
-        <img src="https://dermatouch.com/cdn/shop/files/dermatouch-logo.png?v=1762853286&width=300" alt="" class="intro-logo">
-        <span class="intro-draw-pen"></span>
+        <!-- Final PNG — opacity:0 until SVG drawing completes, then fades in -->
+        <img src="https://dermatouch.com/cdn/shop/files/dermatouch-logo.png?v=1762853286&width=300"
+             alt="Dermatouch" class="intro-logo" id="introLogoFinal">
+        <!-- SVG stroke-drawing overlay injected by JS -->
+        <div class="intro-draw-wrap" id="introDrawWrap" aria-hidden="true"></div>
         <span class="intro-logo-fallback">DT</span>
       </div>
       <div class="intro-title">Operations Command</div>

@@ -12,6 +12,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "potrace": "^2.1.8",
     "xlsx": "^0.18.5"
   },
   "dependencies": {
