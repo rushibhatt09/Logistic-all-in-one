@@ -415,9 +415,10 @@ function renderShipments() {
 function fillCarrierFilter() {
   const sel = $('#carrierFilter'); if (!sel) return;
   const cur = sel.value;
-  const carriers = [...new Set(dashboard.shipments.map(s => s.carrier).filter(Boolean))].sort();
+  // Use carrierPerformance (all carriers) — not the 1000-row shipments slice
+  const carriers = (dashboard.carrierPerformance || []).map(p => p.carrier).filter(Boolean).sort();
   sel.innerHTML = '<option value="">All carriers</option>' + carriers.map(c => `<option value="${c}">${c}</option>`).join('');
-  sel.value = cur;
+  sel.value = carriers.includes(cur) ? cur : '';
 }
 
 function renderDetail() {
@@ -1212,9 +1213,26 @@ function renderAll() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
+async function loadCurrentUser() {
+  try {
+    const r = await fetch('/api/auth/me');
+    if (r.status === 401) { window.location.replace('/login.html'); return; }
+    if (!r.ok) return;
+    const user = await r.json();
+    // Update sidebar user info with real session data
+    const avatarEl = $('.sb-avatar');
+    const nameEl   = $('.sb-user-name');
+    const roleEl   = $('.sb-user-role');
+    if (avatarEl) avatarEl.textContent = user.avatar || 'RB';
+    if (nameEl)   nameEl.textContent   = user.name   || 'User';
+    if (roleEl)   roleEl.textContent   = user.title  || user.role || 'Team Member';
+  } catch (e) { console.warn('Could not load user info:', e.message); }
+}
+
 async function boot(showToast = true) {
   try {
     const r = await fetch('/api/dashboard/summary');
+    if (r.status === 401) { window.location.replace('/login.html'); return; }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     dashboard = await r.json();
     renderAll();
@@ -1320,4 +1338,5 @@ function wireEvents() {
 // ── Start ─────────────────────────────────────────────────────────────────────
 wireEvents();
 wireChatbot();
+loadCurrentUser();
 boot(false);

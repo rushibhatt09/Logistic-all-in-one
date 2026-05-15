@@ -1,10 +1,176 @@
 import { randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
 import { readJson, writeJson } from '../storage/jsonStore.js';
 import { ingestShipmentEvent } from '../services/ingestionService.js';
 import { validateCharge } from '../services/discrepancyService.js';
 import { getDashboardSummary } from '../services/reportService.js';
 import { importData, recalculateDisputes } from '../services/importService.js';
+import { sessions } from '../auth/sessions.js';
+
+const __apidir  = path.dirname(fileURLToPath(import.meta.url));
+const DATA_DIR  = path.join(__apidir, '../../data');
+const USERS_PATH = path.join(DATA_DIR, 'users.json');
+const ALOG_PATH  = path.join(DATA_DIR, 'access_log.json');
+
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+function parseCookies(header) {
+  const cookies = {};
+  if (!header) return cookies;
+  for (const pair of header.split(';')) {
+    const idx = pair.indexOf('=');
+    if (idx < 0) continue;
+    const key = pair.slice(0, idx).trim();
+    try { cookies[key] = decodeURIComponent(pair.slice(idx + 1).trim()); }
+    catch { cookies[key] = pair.slice(idx + 1).trim(); }
+  }
+  return cookies;
+}
+
+function getSessionToken(req) {
+  return parseCookies(req.headers.cookie || '')['dt_session'] || null;
+}
+
+function getSession(req) {
+  const token = getSessionToken(req);
+  return token ? sessions.get(token) : null;
+}
+
+async function loadUsers() {
+  try {
+    const raw = await readFile(USERS_PATH, 'utf8');
+    return JSON.parse(raw);
+  } catch { return []; }
+}
+
+async function appendAccessLog(entry) {
+  try {
+    let logs = [];
+    if (existsSync(ALOG_PATH)) {
+      try { logs = JSON.parse(await readFile(ALOG_PATH, 'utf8')); } catch {}
+    }
+    logs.push(entry);
+    if (logs.length > 2000) logs = logs.slice(-2000);
+    await writeFile(ALOG_PATH, JSON.stringify(logs, null, 2));
+  } catch (e) { console.error('access log error:', e.message); }
+}
+
+// ── Auth request handler ──────────────────────────────────────────────────────
+
+async function handleAuthRequest(req, res, url) {
+
+  // POST /api/auth/login
+  if (req.method === 'POST' && url.pathname === '/api/auth/login') {
+    const body = await readBody(req);
+    const { username, password } = body;
+    const users = await loadUsers();
+    const user  = users.find(u => u.username === username && u.password === password);
+
+    if (!user) {
+      sendJson(res, 401, { error: 'Invalid username or password' });
+      return;
+    }
+
+    const token = randomUUID();
+    const ip    = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+    const session = {
+      userId:  user.id,
+      name:    user.name,
+      email:   user.email,
+      role:    user.role,
+      avatar:  user.avatar || user.name.split(' ').map(n => n[0]).join('').toUpperCase(),
+      title:   user.title || 'Team Member',
+      loginAt: new Date().toISOString(),
+      ip
+    };
+    sessions.set(token, session);
+
+    await appendAccessLog({
+      type: 'login', name: user.name, email: user.email,
+      username: user.username, role: user.role, ip,
+      timestamp: new Date().toISOString()
+    });
+
+    res.writeHead(200, {
+      'Content-Type':  'application/json; charset=utf-8',
+      'Set-Cookie':    `dt_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=28800`
+    });
+    res.end(JSON.stringify({
+      ok:   true,
+      user: { name: session.name, email: session.email, role: session.role,
+              avatar: session.avatar, title: session.title }
+    }));
+    return;
+  }
+
+  // GET /api/auth/logout
+  if (url.pathname === '/api/auth/logout') {
+    const token = getSessionToken(req);
+    if (token) {
+      const session = sessions.get(token);
+      if (session) {
+        const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+        await appendAccessLog({
+          type: 'logout', name: session.name, email: session.email,
+          username: session.name, role: session.role, ip,
+          timestamp: new Date().toISOString()
+        });
+      }
+      sessions.delete(token);
+    }
+    res.writeHead(302, {
+      'Set-Cookie': 'dt_session=; Path=/; HttpOnly; Max-Age=0',
+      'Location':   '/login.html'
+    });
+    res.end();
+    return;
+  }
+
+  // GET /api/auth/me
+  if (req.method === 'GET' && url.pathname === '/api/auth/me') {
+    const session = getSession(req);
+    if (!session) { sendJson(res, 401, { error: 'Not authenticated' }); return; }
+    sendJson(res, 200, {
+      name:    session.name,
+      email:   session.email,
+      role:    session.role,
+      avatar:  session.avatar,
+      title:   session.title,
+      loginAt: session.loginAt
+    });
+    return;
+  }
+
+  // GET /api/auth/sessions  — who's currently viewing (admin only)
+  if (req.method === 'GET' && url.pathname === '/api/auth/sessions') {
+    const session = getSession(req);
+    if (!session || session.role !== 'admin') { sendJson(res, 403, { error: 'Forbidden' }); return; }
+    const active = [...sessions.values()].map(s => ({
+      name: s.name, email: s.email, role: s.role,
+      loginAt: s.loginAt, ip: s.ip
+    }));
+    sendJson(res, 200, { sessions: active, count: active.length });
+    return;
+  }
+
+  // GET /api/auth/access-log  — login history (admin only)
+  if (req.method === 'GET' && url.pathname === '/api/auth/access-log') {
+    const session = getSession(req);
+    if (!session || session.role !== 'admin') { sendJson(res, 403, { error: 'Forbidden' }); return; }
+    try {
+      const raw  = await readFile(ALOG_PATH, 'utf8');
+      const logs = JSON.parse(raw);
+      sendJson(res, 200, { logs: logs.slice(-100).reverse() });
+    } catch { sendJson(res, 200, { logs: [] }); }
+    return;
+  }
+
+  sendJson(res, 404, { error: 'Not found' });
+}
 
 let _anthropic = null;
 function getAnthropic() {
@@ -51,6 +217,11 @@ function toCsv(rows) {
 }
 
 export async function handleApiRequest(req, res, url) {
+  // Auth endpoints — no session required
+  if (url.pathname.startsWith('/api/auth/')) {
+    return handleAuthRequest(req, res, url);
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/health') {
     sendJson(res, 200, { ok: true, service: 'logistics-dashboard' });
     return;
