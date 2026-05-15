@@ -105,6 +105,33 @@ a { text-decoration: none; color: inherit; }
 }
 .intro-logo-shell::after { animation-delay: .62s; }
 .intro-logo { max-width: 150px; max-height: 44px; object-fit: contain; animation: logoFloat 2.4s ease-in-out infinite; }
+
+/* ── Intro drawing pen — glows gold on light background ── */
+.intro-draw-pen {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 3px;
+  border-radius: 2px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: linear-gradient(
+    180deg,
+    transparent              0%,
+    rgba(155,114,64,0.45)   15%,
+    rgba(180,138,60,0.9)    38%,
+    rgba(200,160,70,1.0)    47%,
+    #fff8e0                 50%,
+    rgba(200,160,70,1.0)    53%,
+    rgba(180,138,60,0.9)    62%,
+    rgba(155,114,64,0.45)   85%,
+    transparent             100%
+  );
+  box-shadow:
+    0 0  7px 3px  rgba(155,114,64,0.85),
+    0 0 18px 7px  rgba(155,114,64,0.45),
+    0 0 32px 12px rgba(155,114,64,0.18);
+}
 .intro-logo-fallback {
   display: none; width: 54px; height: 54px; place-items: center;
   border-radius: 16px; background: var(--text); color: white; font-weight: 800;

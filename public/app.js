@@ -1,5 +1,7 @@
 /* ── Dermatouch Operations Command · app.js ── */
 
+const _pageStartMS = Date.now(); // reliable page-load timestamp (not performance.now)
+
 let dashboard = null;
 let selectedShipmentId = null;
 let disputePageSize = 50;
@@ -22,14 +24,19 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2600);
 }
 
+// Splash stays visible until logo drawing animation completes (~1.5s from load)
+const INTRO_MIN_MS = 2400;
+
 function finishIntro() {
   document.body.classList.add('app-ready');
   const intro = $('#appIntro');
   if (!intro || intro.classList.contains('hide')) return;
+  const elapsed   = Date.now() - _pageStartMS;   // true ms since page load
+  const remaining = Math.max(0, INTRO_MIN_MS - elapsed);
   window.setTimeout(() => {
     intro.classList.add('hide');
     window.setTimeout(() => intro.remove(), 520);
-  }, 380);
+  }, remaining + 380);
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -1839,72 +1846,91 @@ function wireEvents() {
 }
 
 // ── Logo Drawing Animation ────────────────────────────────────────────────────
-// Clips the WRAPPER div (no filter) so clip-path works reliably.
-// Pen is a sibling outside the clip so its glow never gets cut off.
+// Runs on BOTH the big intro/splash logo (clearly visible) and the sidebar logo.
 function animateLogo() {
-  const drawWrap = document.querySelector('.sb-logo-draw'); // clipped
-  const pen      = document.querySelector('.sb-draw-pen');  // free, outside clip
-  const logo     = document.querySelector('.sb-logo');
-  if (!drawWrap || !pen || !logo) return;
 
-  const run = () => {
-    const DUR   = 1150;  // ms total
-    const DELAY = 380;   // ms before animation starts
+  // Helper: run a drawing-pen reveal on any element
+  // el       = the element to clip (must NOT have CSS filter)
+  // pen      = the pen span (sibling, positioned absolutely outside clip)
+  // afterEl  = optional element to apply afterglow filter to
+  // opts     = { dur, delay, penEndPx }
+  function drawReveal(el, pen, afterEl, opts) {
+    const DUR   = opts.dur   || 1200;
+    const DELAY = opts.delay || 300;
+    const END   = opts.penEndPx || (el.getBoundingClientRect().width || 100);
+    const EASE  = 'cubic-bezier(0.4, 0, 0.2, 1)';
 
-    // ── Measure logo width so pen can track in pixels ──
-    const logoW = drawWrap.getBoundingClientRect().width || 90;
+    el.style.transition  = 'none';
+    el.style.clipPath    = 'inset(0 100% 0 0)';
+    pen.style.transition = 'none';
+    pen.style.left       = '0px';
+    pen.style.opacity    = '0';
+    void el.getBoundingClientRect();
 
-    // ── Set initial state: wrapper fully hidden from right ──
-    drawWrap.style.transition = 'none';
-    drawWrap.style.clipPath   = 'inset(0 100% 0 0)';
-    pen.style.transition      = 'none';
-    pen.style.left            = '0px';
-    pen.style.opacity         = '0';
-    void drawWrap.getBoundingClientRect(); // force reflow
-
-    // Step 1 (after DELAY): set transition, show pen
     setTimeout(() => {
-      const ease = 'cubic-bezier(0.4, 0, 0.2, 1)';
-      drawWrap.style.transition = `clip-path ${DUR}ms ${ease}`;
-      pen.style.transition      = `left ${DUR}ms ${ease}`;
-      pen.style.opacity         = '1';
+      el.style.transition  = `clip-path ${DUR}ms ${EASE}`;
+      pen.style.transition = `left ${DUR}ms ${EASE}`;
+      pen.style.opacity    = '1';
 
-      // Step 2 (one paint tick later): apply end values → triggers transition
       setTimeout(() => {
-        drawWrap.style.clipPath = 'inset(0 0% 0 0)';
-        pen.style.left          = logoW + 'px';
+        el.style.clipPath = 'inset(0 0% 0 0)';
+        pen.style.left    = END + 'px';
 
-        // Fade pen near the end
+        // Fade pen near end
         setTimeout(() => {
-          pen.style.transition = 'opacity 200ms ease';
+          pen.style.transition = 'opacity 220ms ease';
           pen.style.opacity    = '0';
-        }, Math.round(DUR * 0.82));
+        }, Math.round(DUR * 0.80));
 
-        // Gold afterglow after full reveal
-        setTimeout(() => {
-          logo.style.transition = 'none';
-          logo.style.filter     = 'brightness(0) invert(1) drop-shadow(0 0 10px rgba(232,201,122,0.95))';
-          void logo.getBoundingClientRect();
-          logo.style.transition = 'filter 850ms ease-out';
-          logo.style.filter     = 'brightness(0) invert(1) drop-shadow(0 0 0px rgba(232,201,122,0))';
+        // Afterglow on afterEl (if provided and has filter)
+        if (afterEl) {
           setTimeout(() => {
-            logo.style.transition     = '';
-            logo.style.filter         = '';
-            drawWrap.style.transition = '';
-            drawWrap.style.clipPath   = '';
-          }, 900);
-        }, DUR + 100);
+            afterEl.style.transition = 'none';
+            afterEl.style.filter     = 'brightness(0) invert(1) drop-shadow(0 0 12px rgba(232,201,122,1))';
+            void afterEl.getBoundingClientRect();
+            afterEl.style.transition = 'filter 900ms ease-out';
+            afterEl.style.filter     = 'brightness(0) invert(1) drop-shadow(0 0 0px rgba(232,201,122,0))';
+            setTimeout(() => { afterEl.style.transition = ''; afterEl.style.filter = ''; }, 950);
+          }, DUR + 80);
+        }
 
-      }, 20); // one paint tick — reliable without RAF
+        // Clean up clip after done
+        setTimeout(() => {
+          el.style.transition = '';
+          el.style.clipPath   = '';
+        }, DUR + 1100);
+
+      }, 20);
     }, DELAY);
-  };
+  }
 
-  // Only run once image has confirmed loaded
-  if (logo.complete && logo.naturalWidth > 0) {
-    setTimeout(run, 80);
-  } else {
-    logo.addEventListener('load',  () => setTimeout(run, 80), { once: true });
-    logo.addEventListener('error', () => { drawWrap.style.clipPath = ''; }, { once: true });
+  // ── 1. BIG INTRO / SPLASH LOGO (most visible — no filter on img) ──────────
+  const introLogo = document.querySelector('.intro-logo');
+  const introPen  = document.querySelector('.intro-draw-pen');
+  if (introLogo && introPen) {
+    const runIntro = () => {
+      // Pause float during drawing
+      introLogo.style.animationPlayState = 'paused';
+      const w = introLogo.getBoundingClientRect().width || 130;
+      drawReveal(introLogo, introPen, null, { dur: 1100, delay: 200, penEndPx: w });
+      // Resume float after drawing done
+      setTimeout(() => { introLogo.style.animationPlayState = ''; }, 400 + 1300 + 200);
+    };
+    if (introLogo.complete && introLogo.naturalWidth > 0) setTimeout(runIntro, 80);
+    else introLogo.addEventListener('load', () => setTimeout(runIntro, 80), { once: true });
+  }
+
+  // ── 2. SIDEBAR LOGO (clip wrapper div — not the filtered img) ─────────────
+  const drawWrap = document.querySelector('.sb-logo-draw');
+  const sbPen    = document.querySelector('.sb-draw-pen');
+  const sbLogo   = document.querySelector('.sb-logo');
+  if (drawWrap && sbPen && sbLogo) {
+    const runSidebar = () => {
+      const w = drawWrap.getBoundingClientRect().width || 90;
+      drawReveal(drawWrap, sbPen, sbLogo, { dur: 1100, delay: 350, penEndPx: w });
+    };
+    if (sbLogo.complete && sbLogo.naturalWidth > 0) setTimeout(runSidebar, 80);
+    else sbLogo.addEventListener('load', () => setTimeout(runSidebar, 80), { once: true });
   }
 }
 
