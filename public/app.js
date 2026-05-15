@@ -1838,8 +1838,79 @@ function wireEvents() {
   });
 }
 
+// ── Logo Drawing Animation ────────────────────────────────────────────────────
+// Clips the WRAPPER div (no filter) so clip-path works reliably.
+// Pen is a sibling outside the clip so its glow never gets cut off.
+function animateLogo() {
+  const drawWrap = document.querySelector('.sb-logo-draw'); // clipped
+  const pen      = document.querySelector('.sb-draw-pen');  // free, outside clip
+  const logo     = document.querySelector('.sb-logo');
+  if (!drawWrap || !pen || !logo) return;
+
+  const run = () => {
+    const DUR   = 1150;  // ms total
+    const DELAY = 380;   // ms before animation starts
+
+    // ── Measure logo width so pen can track in pixels ──
+    const logoW = drawWrap.getBoundingClientRect().width || 90;
+
+    // ── Set initial state: wrapper fully hidden from right ──
+    drawWrap.style.transition = 'none';
+    drawWrap.style.clipPath   = 'inset(0 100% 0 0)';
+    pen.style.transition      = 'none';
+    pen.style.left            = '0px';
+    pen.style.opacity         = '0';
+    void drawWrap.getBoundingClientRect(); // force reflow
+
+    // Step 1 (after DELAY): set transition, show pen
+    setTimeout(() => {
+      const ease = 'cubic-bezier(0.4, 0, 0.2, 1)';
+      drawWrap.style.transition = `clip-path ${DUR}ms ${ease}`;
+      pen.style.transition      = `left ${DUR}ms ${ease}`;
+      pen.style.opacity         = '1';
+
+      // Step 2 (one paint tick later): apply end values → triggers transition
+      setTimeout(() => {
+        drawWrap.style.clipPath = 'inset(0 0% 0 0)';
+        pen.style.left          = logoW + 'px';
+
+        // Fade pen near the end
+        setTimeout(() => {
+          pen.style.transition = 'opacity 200ms ease';
+          pen.style.opacity    = '0';
+        }, Math.round(DUR * 0.82));
+
+        // Gold afterglow after full reveal
+        setTimeout(() => {
+          logo.style.transition = 'none';
+          logo.style.filter     = 'brightness(0) invert(1) drop-shadow(0 0 10px rgba(232,201,122,0.95))';
+          void logo.getBoundingClientRect();
+          logo.style.transition = 'filter 850ms ease-out';
+          logo.style.filter     = 'brightness(0) invert(1) drop-shadow(0 0 0px rgba(232,201,122,0))';
+          setTimeout(() => {
+            logo.style.transition     = '';
+            logo.style.filter         = '';
+            drawWrap.style.transition = '';
+            drawWrap.style.clipPath   = '';
+          }, 900);
+        }, DUR + 100);
+
+      }, 20); // one paint tick — reliable without RAF
+    }, DELAY);
+  };
+
+  // Only run once image has confirmed loaded
+  if (logo.complete && logo.naturalWidth > 0) {
+    setTimeout(run, 80);
+  } else {
+    logo.addEventListener('load',  () => setTimeout(run, 80), { once: true });
+    logo.addEventListener('error', () => { drawWrap.style.clipPath = ''; }, { once: true });
+  }
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 wireEvents();
 wireChatbot();
 loadCurrentUser();
+animateLogo();
 boot(false);
