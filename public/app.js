@@ -139,6 +139,15 @@ function renderAuditTable(rows, totals, tbodyId = 'auditRows') {
     const rtoColor  = r.rtoRate > 20 ? '#BE2E2E' : r.rtoRate > 10 ? '#B05A10' : '#1E7B48';
     const dispColor = r.disputeRate > 15 ? '#BE2E2E' : r.disputeRate > 5 ? '#B05A10' : '#9895A2';
 
+    // If carrier has shipments but 0 delivered AND 0 RTO → tracking data incomplete
+    const trackingMissing = r.total > 0 && r.delivered === 0 && r.rto === 0;
+    const rtoCell = trackingMissing
+      ? `<span style="color:var(--text-3);font-style:italic;font-size:12px">No tracking</span>`
+      : `<div class="bar-wrap">
+           <span style="color:${rtoColor};font-weight:600">${r.rtoRate}%</span>
+           <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(r.rtoRate,100)}%;background:${rtoColor}"></div></div>
+         </div>`;
+
     const shortRow = tbodyId === 'auditRows';
     if (shortRow) {
       return `
@@ -152,7 +161,7 @@ function renderAuditTable(rows, totals, tbodyId = 'auditRows') {
           </td>
           <td class="r num">${fmtInt(r.total)}</td>
           <td class="r num">${fmtMoney(r.totalBillingAmount)}</td>
-          <td class="r">
+          <td class="r" title="Negative = carrier billed less than rate card. Positive = carrier overcharged you.">
             ${varAbs > 10 ? `<span class="var-chip ${varClass}">${varText}</span>` : '<span class="num-zero">—</span>'}
           </td>
           <td class="r">
@@ -161,13 +170,8 @@ function renderAuditTable(rows, totals, tbodyId = 'auditRows') {
               <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(r.disputeRate,100)}%;background:${dispColor}"></div></div>
             </div>
           </td>
-          <td class="r">
-            <div class="bar-wrap">
-              <span style="color:${rtoColor};font-weight:600">${r.rtoRate}%</span>
-              <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(r.rtoRate,100)}%;background:${rtoColor}"></div></div>
-            </div>
-          </td>
-          <td class="r num" style="color:var(--text-2)">${fmtDays(r.avgDeliveryDays)}</td>
+          <td class="r">${rtoCell}</td>
+          <td class="r num" style="color:var(--text-2)">${trackingMissing ? '—' : fmtDays(r.avgDeliveryDays)}</td>
         </tr>`;
     } else {
       return `
@@ -182,7 +186,7 @@ function renderAuditTable(rows, totals, tbodyId = 'auditRows') {
           <td class="r num">${fmtInt(r.total)}</td>
           <td class="r num">${fmtMoney(r.totalBillingAmount)}</td>
           <td class="r num" style="color:var(--text-2)">${r.expectedBillingAmount > 0 ? fmtMoney(r.expectedBillingAmount) : '—'}</td>
-          <td class="r">
+          <td class="r" title="Negative = carrier billed less than rate card. Positive = carrier overcharged you.">
             ${varAbs > 10 ? `<span class="var-chip ${varClass}">${varText}</span>` : '<span class="num-zero">—</span>'}
           </td>
           <td class="r">
@@ -192,13 +196,8 @@ function renderAuditTable(rows, totals, tbodyId = 'auditRows') {
             </div>
           </td>
           <td class="r num" style="color:var(--red)">${r.disputeAmount > 0 ? fmtMoney(r.disputeAmount) : '—'}</td>
-          <td class="r">
-            <div class="bar-wrap">
-              <span style="color:${rtoColor};font-weight:600">${r.rtoRate}%</span>
-              <div class="mini-bar"><div class="mini-bar-fill" style="width:${Math.min(r.rtoRate,100)}%;background:${rtoColor}"></div></div>
-            </div>
-          </td>
-          <td class="r num" style="color:var(--text-2)">${fmtDays(r.avgDeliveryDays)}</td>
+          <td class="r">${rtoCell}</td>
+          <td class="r num" style="color:var(--text-2)">${trackingMissing ? '—' : fmtDays(r.avgDeliveryDays)}</td>
         </tr>`;
     }
   }).join('') || `<tr><td colspan="9" class="loading-cell">No carrier data available</td></tr>`;
@@ -212,8 +211,6 @@ function renderAuditTable(rows, totals, tbodyId = 'auditRows') {
   const badgeEl = $(badge);
   if (badgeEl) badgeEl.innerHTML = totalVariance > 100
     ? `<span class="var-chip over">+${fmtMoney(totalVariance)} net overbilled</span>`
-    : totalVariance < -100
-    ? `<span class="var-chip under">${fmtMoney(Math.abs(totalVariance))} underbilled</span>`
     : '';
 }
 
@@ -1275,6 +1272,24 @@ function wireEvents() {
   $('#carrierSearch').addEventListener('input', renderCarrierShipments);
   $('#carrierStatusFilter').addEventListener('change', renderCarrierShipments);
   $('#carrierOCFilter')?.addEventListener('change', renderCarrierShipments);
+
+  // Variance column tooltip
+  const varInfoBtn = $('#varianceInfoBtn');
+  const floatTip   = $('#floatTooltip');
+  if (varInfoBtn && floatTip) {
+    varInfoBtn.addEventListener('mouseenter', e => {
+      floatTip.innerHTML =
+        '<strong style="display:block;margin-bottom:6px;font-size:13.5px">Billed vs Rate Card</strong>' +
+        '<span style="color:#E8C97A;font-weight:600">− Negative</span> = carrier charged <em>less</em> than rate card<br>' +
+        '<span style="color:#E57373;font-weight:600">+ Positive</span> = carrier <em>overcharged</em> you — claim it back';
+      const r = varInfoBtn.getBoundingClientRect();
+      floatTip.style.display = 'block';
+      const tw = floatTip.offsetWidth;
+      floatTip.style.left = Math.min(r.left, window.innerWidth - tw - 12) + 'px';
+      floatTip.style.top  = (r.bottom + 8) + 'px';
+    });
+    varInfoBtn.addEventListener('mouseleave', () => { floatTip.style.display = 'none'; });
+  }
 
   // Top bar actions
   $('#refreshBtn').addEventListener('click', () => boot(true));

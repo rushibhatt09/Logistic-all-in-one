@@ -252,6 +252,20 @@ a { text-decoration: none; color: inherit; }
 .sb-user-name { font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,.82); white-space: nowrap; }
 .sb-user-role { font-size: 11px; color: rgba(255,255,255,.38); white-space: nowrap; }
 
+/* ── Column header info icon ── */
+.th-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 3px;
+  cursor: pointer;
+  color: var(--text-3);
+  font-size: 12px;
+  vertical-align: middle;
+  user-select: none;
+}
+.th-info:hover { color: var(--accent); }
+
 /* ── Main Area ── */
 .main-area {
   margin-left: var(--sidebar-w);

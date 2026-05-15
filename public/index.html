@@ -157,7 +157,7 @@
                       <th>Carrier</th>
                       <th class="r">Ships</th>
                       <th class="r">Billed ₹</th>
-                      <th class="r">Variance</th>
+                      <th class="r">Variance <span class="th-info" id="varianceInfoBtn">ⓘ</span></th>
                       <th class="r">Disputes</th>
                       <th class="r">RTO%</th>
                       <th class="r">Avg Del.</th>
@@ -626,6 +626,15 @@
       <button id="chatSend" class="chat-send-btn">↑</button>
     </div>
   </div>
+
+  <!-- Global floating tooltip -->
+  <div id="floatTooltip" style="
+    display:none; position:fixed; z-index:9999;
+    background:#1C1915; color:rgba(255,255,255,.92);
+    font-size:13px; line-height:1.65; padding:12px 15px;
+    border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.3);
+    max-width:280px; pointer-events:none;
+  "></div>
 
   <script src="app.js" type="module"></script>
 </body>
