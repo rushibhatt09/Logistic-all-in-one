@@ -121,6 +121,7 @@ export async function handleApiRequest(req, res, url) {
     const data = await readJson();
     const carrierById  = new Map(data.carriers.map(c => [c.id, c]));
     const orderById    = new Map((data.orders || []).map(o => [o.id, o]));
+    const referenceAudit = (data.referenceAudits || []).find(audit => normalizeCarrierName(audit.carrier) === carrierName);
 
     // All shipments for this carrier
     const shipments = data.shipments
@@ -195,25 +196,66 @@ export async function handleApiRequest(req, res, url) {
     const totalDelivered  = shipments.filter(s => s.currentStatus === 'delivered').length;
     const totalRTO        = shipments.filter(s => s.rtoFlag || String(s.currentStatus).startsWith('rto_')).length;
     const totalBilled     = charges.reduce((s, c) => s + Number(c.billedAmount || 0), 0);
-    const totalOvercharge = charges.filter(c => Number(c.varianceAmount || 0) > 10)
+    let totalOvercharge = charges.filter(c => Number(c.varianceAmount || 0) > 10)
                                     .reduce((s, c) => s + Number(c.varianceAmount || 0), 0);
     const openDisputes    = disputes.filter(d => d.status === 'open');
-    const totalAtRisk     = openDisputes.reduce((s, d) => s + Number(d.claimedAmount || 0), 0);
+    let totalAtRisk     = openDisputes.reduce((s, d) => s + Number(d.claimedAmount || 0), 0);
+    let totalOpenDisputes = openDisputes.length;
+    let effectiveTotalShipments = shipments.length;
+    let effectiveZoneBreakdown = zoneBreakdown;
+    let effectiveDisputes = openDisputes.sort((a, b) => (b.claimedAmount || 0) - (a.claimedAmount || 0)).slice(0, 500);
+
+    if (referenceAudit?.trusted !== false) {
+      effectiveTotalShipments = Number(referenceAudit.shipmentsAudited || shipments.length);
+      totalOvercharge = Number(referenceAudit.claimAmount || totalOvercharge || 0);
+      totalAtRisk = totalOvercharge;
+      totalOpenDisputes = Number(referenceAudit.errorCount || totalOpenDisputes || 0);
+
+      if (!effectiveZoneBreakdown.length && totalOpenDisputes > 0) {
+        effectiveZoneBreakdown = [{
+          zone: `${referenceAudit.period || 'Reference'} audit`,
+          total: effectiveTotalShipments,
+          delivered: 0,
+          rto: 0,
+          disputes: totalOpenDisputes,
+          billedAmount: 0,
+          overcharge: Math.round(totalOvercharge * 100) / 100
+        }];
+      }
+
+      if (!effectiveDisputes.length && totalOpenDisputes > 0) {
+        effectiveDisputes = [{
+          id: `ref_${carrierName.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+          shipmentId: '',
+          status: 'open',
+          reason: 'confirmed_reference_audit',
+          disputeNote: `${referenceAudit.period || ''} approved audit: ${totalOpenDisputes} confirmed billing errors.`,
+          claimedAmount: totalOvercharge,
+          recoveredAmount: 0,
+          openedAt: new Date().toISOString()
+        }];
+      }
+    } else if (referenceAudit) {
+      totalOvercharge = 0;
+      totalAtRisk = 0;
+      totalOpenDisputes = 0;
+    }
 
     sendJson(res, 200, {
       carrier: carrierName,
-      totalShipments: shipments.length,
+      totalShipments: effectiveTotalShipments,
       totalDelivered,
       totalRTO,
       totalBilled:     Math.round(totalBilled * 100) / 100,
       totalOvercharge: Math.round(totalOvercharge * 100) / 100,
-      totalOpenDisputes: openDisputes.length,
+      totalOpenDisputes,
       totalAtRisk:     Math.round(totalAtRisk * 100) / 100,
-      rtoRate:         shipments.length ? Math.round(totalRTO / shipments.length * 1000) / 10 : 0,
+      rtoRate:         effectiveTotalShipments ? Math.round(totalRTO / effectiveTotalShipments * 1000) / 10 : 0,
+      referenceAudit: referenceAudit || null,
       shipments: shipments.slice(0, 2000),
       charges: charges.slice(0, 2000),
-      disputes: openDisputes.sort((a, b) => (b.claimedAmount || 0) - (a.claimedAmount || 0)).slice(0, 500),
-      zoneBreakdown,
+      disputes: effectiveDisputes,
+      zoneBreakdown: effectiveZoneBreakdown,
       weightBreakdown: weightBuckets,
     });
     return;

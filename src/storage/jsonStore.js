@@ -16,6 +16,7 @@ const seed = {
   events: [],
   charges: [],
   rateCards: [],
+  referenceAudits: [],
   disputes: [],
   auditLogs: []
 };

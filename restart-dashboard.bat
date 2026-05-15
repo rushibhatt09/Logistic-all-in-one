@@ -16,6 +16,6 @@ if not exist "%NODE_EXE%" (
 )
 
 echo Starting dashboard on http://localhost:%APP_PORT%
-start "Logistics Dashboard Server" /D "%~dp0" cmd /k "set PORT=%APP_PORT%&& echo Starting from %CD%&& C:\Users\micro\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe server.js && echo Server stopped. && pause"
+start "Logistics Dashboard Server" /D "%~dp0" cmd /k tools\run-server.cmd
 timeout /t 2 >nul
 start http://localhost:%APP_PORT%

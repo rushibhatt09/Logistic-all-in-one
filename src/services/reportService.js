@@ -29,11 +29,20 @@ export async function getDashboardSummary() {
     refundAmount: roundMoney(data.charges
       .filter(charge => Number(charge.varianceAmount || 0) > 10)
       .reduce((sum, charge) => sum + Number(charge.varianceAmount || 0), 0)),
+    confirmedRefundAmount: 0,
     recoveredAmount: roundMoney(data.disputes.reduce((sum, dispute) => sum + Number(dispute.recoveredAmount || 0), 0)),
     netOverbilling: 0,
     avgDeliveryDays: null,
     deliveryDaysSample: 0
   };
+  const trustedReferenceAudits = (data.referenceAudits || []).filter(audit => audit.trusted !== false);
+  const untrustedReferenceAudits = (data.referenceAudits || []).filter(audit => audit.trusted === false);
+  totals.confirmedRefundAmount = roundMoney(trustedReferenceAudits.reduce((sum, audit) => sum + Number(audit.claimAmount || 0), 0));
+  if (totals.confirmedRefundAmount > 0) {
+    totals.refundAmount = totals.confirmedRefundAmount;
+    totals.openDisputes = trustedReferenceAudits.reduce((sum, audit) => sum + Number(audit.errorCount || 0), 0);
+    totals.wrongCharges = totals.openDisputes;
+  }
   totals.netOverbilling = roundMoney(totals.totalBillingAmount - totals.expectedBillingAmount);
 
   for (const shipment of data.shipments) {
@@ -96,11 +105,41 @@ export async function getDashboardSummary() {
     }
   }
 
+  for (const audit of trustedReferenceAudits) {
+    const carrierName = normalizeCarrierName(audit.carrier);
+    if (!performanceByCarrier.has(carrierName)) {
+      performanceByCarrier.set(carrierName, emptyCarrierPerformance(carrierName, Number(audit.shipmentsAudited || 0)));
+    }
+    const performance = performanceByCarrier.get(carrierName);
+    performance.openDisputes = Number(audit.errorCount || performance.openDisputes || 0);
+    performance.disputeAmount = Number(audit.claimAmount || performance.disputeAmount || 0);
+    performance.referenceAudit = {
+      sourceFile: audit.sourceFile,
+      period: audit.period,
+      confidence: audit.confidence || 'confirmed'
+    };
+  }
+
+  for (const audit of untrustedReferenceAudits) {
+    const carrierName = normalizeCarrierName(audit.carrier);
+    if (!performanceByCarrier.has(carrierName)) {
+      performanceByCarrier.set(carrierName, emptyCarrierPerformance(carrierName, Number(audit.shipmentsAudited || 0)));
+    }
+    const performance = performanceByCarrier.get(carrierName);
+    performance.openDisputes = 0;
+    performance.disputeAmount = 0;
+    performance.referenceAudit = {
+      sourceFile: audit.sourceFile,
+      period: audit.period,
+      confidence: audit.confidence || 'needs_review'
+    };
+  }
+
   const carrierPerformance = [...performanceByCarrier.values()]
     .map(performance => ({
       ...performance,
       rtoRate: performance.total ? Math.round((performance.rto / performance.total) * 100) : 0,
-      disputeRate: performance.total ? Math.round((performance.openDisputes / performance.total) * 100) : 0,
+      disputeRate: performance.total ? roundMoney((performance.openDisputes / performance.total) * 100) : 0,
       avgDeliveryDays: performance.deliveryDaysCount ? roundMoney(performance.deliveryDaysTotal / performance.deliveryDaysCount) : null,
       totalBillingAmount: roundMoney(performance.totalBillingAmount),
       expectedBillingAmount: roundMoney(performance.expectedBillingAmount),
@@ -135,6 +174,21 @@ export async function getDashboardSummary() {
           .at(-1)
         || null
     }
+  };
+}
+
+function emptyCarrierPerformance(carrier, total = 0) {
+  return {
+    carrier,
+    total,
+    delivered: 0,
+    rto: 0,
+    openDisputes: 0,
+    disputeAmount: 0,
+    totalBillingAmount: 0,
+    expectedBillingAmount: 0,
+    deliveryDaysTotal: 0,
+    deliveryDaysCount: 0
   };
 }
 
