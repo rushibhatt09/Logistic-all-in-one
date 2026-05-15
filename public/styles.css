@@ -149,25 +149,74 @@ a { text-decoration: none; color: inherit; }
 
 .sidebar-top { display: flex; flex-direction: column; flex: 1; }
 
-/* Brand in sidebar */
+/* ══════════════════════════════════════════════════
+   Brand / Animated Logo — Demo v2
+   ══════════════════════════════════════════════════ */
 .sidebar-brand {
   display: flex; align-items: center; gap: 10px;
   padding: 18px 16px 14px;
   border-bottom: 1px solid rgba(255,255,255,.07);
   flex-shrink: 0;
+  position: relative;
 }
+
+/* Wrapper — relative so shimmer can overlay */
+.sb-logo-wrap {
+  flex: 1; min-width: 0;
+  position: relative;
+  display: flex; align-items: center;
+  overflow: hidden;
+}
+
+/* ── Logo image — reveal left→right on load ── */
 .sb-logo {
   height: 28px; width: auto; object-fit: contain;
-  flex-shrink: 0; filter: brightness(0) invert(1); opacity: .85;
-  transition: opacity .15s;
+  flex-shrink: 0;
+  filter: brightness(0) invert(1);
+  opacity: 0;
+  /* Step 1: fade + lift up into place */
+  animation: logo-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) 250ms forwards;
 }
-.sb-logo:hover { opacity: 1; }
+@keyframes logo-enter {
+  from { opacity: 0; transform: translateY(6px) scale(0.95); }
+  to   { opacity: 0.88; transform: translateY(0) scale(1); }
+}
+.sb-logo:hover { opacity: 1 !important; }
+
+/* Fallback text when image fails */
 .sb-logo-text {
-  font-size: 14px; font-weight: 800; color: #fff; letter-spacing: .1em; flex: 1;
-  display: none;
+  font-size: 14px; font-weight: 800; color: #fff;
+  letter-spacing: .1em; flex: 1; display: none;
 }
-.sidebar.collapsed .sb-logo { display: none; }
+
+/* ── Shimmer sweep over the logo ── */
+/* Plays once at load (after logo appears), then every 5s */
+.sb-logo-shimmer {
+  position: absolute;
+  top: 0; bottom: 0; left: -70%;
+  width: 55%;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.18) 48%,
+    rgba(255, 255, 255, 0.28) 52%,
+    transparent 80%
+  );
+  pointer-events: none;
+  animation: logo-shimmer 5s ease-in-out 1s infinite;
+}
+@keyframes logo-shimmer {
+  0%   { left: -70%; opacity: 0; }
+  5%   { opacity: 1; }
+  28%  { left: 120%; opacity: 1; }
+  29%  { left: -70%; opacity: 0; }
+  100% { left: -70%; opacity: 0; }
+}
+
+/* ── Collapsed sidebar ── */
+.sidebar.collapsed .sb-logo      { display: none; }
 .sidebar.collapsed .sb-logo-text { display: block; font-size: 11px; }
+.sidebar.collapsed .sb-logo-shimmer { display: none; }
 
 .sb-collapse {
   margin-left: auto; flex-shrink: 0;
