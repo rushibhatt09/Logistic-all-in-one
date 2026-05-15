@@ -150,73 +150,98 @@ a { text-decoration: none; color: inherit; }
 .sidebar-top { display: flex; flex-direction: column; flex: 1; }
 
 /* ══════════════════════════════════════════════════
-   Brand / Animated Logo — Demo v2
+   Brand / Drawing-Pen Logo Animation — Demo v2
    ══════════════════════════════════════════════════ */
 .sidebar-brand {
   display: flex; align-items: center; gap: 10px;
   padding: 18px 16px 14px;
   border-bottom: 1px solid rgba(255,255,255,.07);
   flex-shrink: 0;
-  position: relative;
 }
 
-/* Wrapper — relative so shimmer can overlay */
 .sb-logo-wrap {
   flex: 1; min-width: 0;
-  position: relative;
   display: flex; align-items: center;
-  overflow: hidden;
 }
 
-/* ── Logo image — reveal left→right on load ── */
+/* ── Drawing wrapper — sized to image ── */
+.sb-logo-draw {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+/* ── Logo: hidden behind clip, drawn left → right ── */
 .sb-logo {
-  height: 28px; width: auto; object-fit: contain;
-  flex-shrink: 0;
+  height: 28px; width: auto; display: block;
   filter: brightness(0) invert(1);
-  opacity: 0;
-  /* Step 1: fade + lift up into place */
-  animation: logo-enter 0.55s cubic-bezier(0.22, 1, 0.36, 1) 250ms forwards;
+  /* Start fully hidden, clip-path reveals it left→right */
+  clip-path: inset(0 100% 0 0);
+  animation:
+    logo-draw-reveal 1.1s cubic-bezier(0.4, 0, 0.15, 1) 500ms forwards,
+    logo-afterglow   0.6s ease-out 1.65s forwards;
+  will-change: clip-path, filter;
 }
-@keyframes logo-enter {
-  from { opacity: 0; transform: translateY(6px) scale(0.95); }
-  to   { opacity: 0.88; transform: translateY(0) scale(1); }
-}
-.sb-logo:hover { opacity: 1 !important; }
 
-/* Fallback text when image fails */
+/* Reveal left→right — perfectly matches pen movement */
+@keyframes logo-draw-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0%   0 0); }
+}
+
+/* Brief warm glow once fully drawn, then settles */
+@keyframes logo-afterglow {
+  0%   { filter: brightness(0) invert(1) drop-shadow(0 0 6px rgba(232,201,122,0.9)); }
+  100% { filter: brightness(0) invert(1) drop-shadow(0 0 0px rgba(232,201,122,0));   }
+}
+
+.sb-logo:hover { filter: brightness(0) invert(1) !important; opacity: 1; }
+
+/* ── Glowing pen tip — sweeps in perfect sync with clip ── */
+.sb-draw-pen {
+  position: absolute;
+  top: -5px; bottom: -5px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  pointer-events: none;
+
+  /* Gold glow — bright center, diffused edges */
+  background: linear-gradient(
+    180deg,
+    transparent               0%,
+    rgba(232, 201, 122, 0.6) 20%,
+    rgba(255, 245, 200, 1.0) 45%,
+    white                    50%,
+    rgba(255, 245, 200, 1.0) 55%,
+    rgba(232, 201, 122, 0.6) 80%,
+    transparent              100%
+  );
+  box-shadow:
+    0 0  6px 2px rgba(232, 201, 122, 0.85),
+    0 0 14px 5px rgba(232, 201, 122, 0.45),
+    0 0 28px 8px rgba(232, 201, 122, 0.20);
+
+  /* Same timing as the reveal — pen leads the exposed edge */
+  animation: pen-sweep 1.1s cubic-bezier(0.4, 0, 0.15, 1) 500ms forwards;
+  will-change: left, opacity;
+}
+
+@keyframes pen-sweep {
+  from { left: 0%;   opacity: 1; }
+  90%  { opacity: 1; }
+  to   { left: 100%; opacity: 0; }
+}
+
+/* Fallback text */
 .sb-logo-text {
   font-size: 14px; font-weight: 800; color: #fff;
-  letter-spacing: .1em; flex: 1; display: none;
-}
-
-/* ── Shimmer sweep over the logo ── */
-/* Plays once at load (after logo appears), then every 5s */
-.sb-logo-shimmer {
-  position: absolute;
-  top: 0; bottom: 0; left: -70%;
-  width: 55%;
-  background: linear-gradient(
-    105deg,
-    transparent 20%,
-    rgba(255, 255, 255, 0.18) 48%,
-    rgba(255, 255, 255, 0.28) 52%,
-    transparent 80%
-  );
-  pointer-events: none;
-  animation: logo-shimmer 5s ease-in-out 1s infinite;
-}
-@keyframes logo-shimmer {
-  0%   { left: -70%; opacity: 0; }
-  5%   { opacity: 1; }
-  28%  { left: 120%; opacity: 1; }
-  29%  { left: -70%; opacity: 0; }
-  100% { left: -70%; opacity: 0; }
+  letter-spacing: .1em; flex: 1;
 }
 
 /* ── Collapsed sidebar ── */
-.sidebar.collapsed .sb-logo      { display: none; }
-.sidebar.collapsed .sb-logo-text { display: block; font-size: 11px; }
-.sidebar.collapsed .sb-logo-shimmer { display: none; }
+.sidebar.collapsed .sb-logo-draw  { display: none; }
+.sidebar.collapsed .sb-logo-text  { display: block; font-size: 11px; }
 
 .sb-collapse {
   margin-left: auto; flex-shrink: 0;
