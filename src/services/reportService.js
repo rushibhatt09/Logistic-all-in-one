@@ -105,18 +105,38 @@ export async function getDashboardSummary() {
     }
   }
 
+  // Group trusted audits by carrier — sum claims/errors across multiple periods
+  const trustedByCarrier = new Map();
   for (const audit of trustedReferenceAudits) {
     const carrierName = normalizeCarrierName(audit.carrier);
+    if (!trustedByCarrier.has(carrierName)) trustedByCarrier.set(carrierName, []);
+    trustedByCarrier.get(carrierName).push(audit);
+  }
+
+  for (const [carrierName, audits] of trustedByCarrier) {
     if (!performanceByCarrier.has(carrierName)) {
-      performanceByCarrier.set(carrierName, emptyCarrierPerformance(carrierName, Number(audit.shipmentsAudited || 0)));
+      const totalAudited = audits.reduce((s, a) => s + Number(a.shipmentsAudited || 0), 0);
+      performanceByCarrier.set(carrierName, emptyCarrierPerformance(carrierName, totalAudited));
     }
     const performance = performanceByCarrier.get(carrierName);
-    performance.openDisputes = Number(audit.errorCount || performance.openDisputes || 0);
-    performance.disputeAmount = Number(audit.claimAmount || performance.disputeAmount || 0);
+    // Sum across all periods
+    const totalErrors   = audits.reduce((s, a) => s + Number(a.errorCount || 0), 0);
+    const totalClaim    = roundMoney(audits.reduce((s, a) => s + Number(a.claimAmount || 0), 0));
+    const totalClaimExGst = roundMoney(audits.reduce((s, a) => s + Number(a.claimAmountExGst || 0), 0));
+    // Latest period (most recent by period string sort)
+    const latestAudit = audits.sort((a, b) => String(b.period || '').localeCompare(String(a.period || '')))[0];
+    performance.openDisputes = totalErrors;
+    performance.disputeAmount = totalClaim;
+    performance.auditClaimAmount = totalClaim;
     performance.referenceAudit = {
-      sourceFile: audit.sourceFile,
-      period: audit.period,
-      confidence: audit.confidence || 'confirmed'
+      sourceFile: latestAudit.sourceFile,
+      period: audits.length > 1
+        ? audits.map(a => a.period).filter(Boolean).join(' + ')
+        : latestAudit.period,
+      claimAmount: totalClaim,
+      claimAmountExGst: totalClaimExGst,
+      confidence: latestAudit.confidence || 'confirmed',
+      periodCount: audits.length
     };
   }
 
@@ -128,6 +148,7 @@ export async function getDashboardSummary() {
     const performance = performanceByCarrier.get(carrierName);
     performance.openDisputes = 0;
     performance.disputeAmount = 0;
+    performance.auditClaimAmount = null; // excluded — show auto-computed value
     performance.referenceAudit = {
       sourceFile: audit.sourceFile,
       period: audit.period,
@@ -136,16 +157,23 @@ export async function getDashboardSummary() {
   }
 
   const carrierPerformance = [...performanceByCarrier.values()]
-    .map(performance => ({
-      ...performance,
-      rtoRate: performance.total ? Math.round((performance.rto / performance.total) * 100) : 0,
-      disputeRate: performance.total ? roundMoney((performance.openDisputes / performance.total) * 100) : 0,
-      avgDeliveryDays: performance.deliveryDaysCount ? roundMoney(performance.deliveryDaysTotal / performance.deliveryDaysCount) : null,
-      totalBillingAmount: roundMoney(performance.totalBillingAmount),
-      expectedBillingAmount: roundMoney(performance.expectedBillingAmount),
-      disputeAmount: roundMoney(performance.disputeAmount),
-      overbillingAmount: roundMoney(performance.totalBillingAmount - performance.expectedBillingAmount)
-    }))
+    .map(performance => {
+      // Use confirmed audit claim amount when available; fall back to auto-computed variance
+      const computedOverbilling = performance.totalBillingAmount - performance.expectedBillingAmount;
+      const overbillingAmount = performance.auditClaimAmount != null && performance.auditClaimAmount > 0
+        ? performance.auditClaimAmount
+        : roundMoney(computedOverbilling);
+      return {
+        ...performance,
+        rtoRate: performance.total ? Math.round((performance.rto / performance.total) * 100) : 0,
+        disputeRate: performance.total ? roundMoney((performance.openDisputes / performance.total) * 100) : 0,
+        avgDeliveryDays: performance.deliveryDaysCount ? roundMoney(performance.deliveryDaysTotal / performance.deliveryDaysCount) : null,
+        totalBillingAmount: roundMoney(performance.totalBillingAmount),
+        expectedBillingAmount: roundMoney(performance.expectedBillingAmount),
+        disputeAmount: roundMoney(performance.disputeAmount),
+        overbillingAmount
+      };
+    })
     .sort((a, b) => b.total - a.total);
 
   const shipments = data.shipments.slice(0, 1000).map(shipment => ({
@@ -163,6 +191,8 @@ export async function getDashboardSummary() {
     disputes: data.disputes.slice(-1000),
     charges: data.charges.slice(-1000),
     auditLogs: data.auditLogs.slice(-20).reverse(),
+    omsVolume: data.omsVolume || null,
+    financialRisk: data.financialRisk || null,
     freshness: {
       lastEventAt: data.events
         .map(event => event.eventTime)
